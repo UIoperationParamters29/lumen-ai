@@ -272,9 +272,7 @@ private fun EmptyChatList(defaultGateway: com.cortex.app.data.model.GatewayEntit
     }
 }
 
-// Helper retained for backward compatibility — no longer used.
-@Composable
-private fun unusedStateHelper(): com.cortex.app.ui.chatlist.ChatListState = ChatListState()
+// (removed dead helper code)
 
 @Composable
 private fun ErrorBanner(message: String, onDismiss: () -> Unit) {

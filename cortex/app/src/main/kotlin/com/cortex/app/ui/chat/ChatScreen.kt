@@ -49,8 +49,11 @@ fun ChatScreen(
 
     // Auto-scroll to bottom when new messages arrive or streaming progresses
     LaunchedEffect(state.messages.size, state.streamingContent, state.streamingReasoning) {
-        if (state.messages.isNotEmpty() || state.streamingContent.isNotEmpty()) {
-            listState.animateScrollToItem((state.messages.size + if (state.streamingContent.isNotEmpty()) 1 else 0).coerceAtLeast(0))
+        val totalItems = state.messages.size + if (state.streamingContent.isNotEmpty()) 1 else 0
+        if (totalItems > 0) {
+            try {
+                listState.animateScrollToItem((totalItems - 1).coerceAtLeast(0))
+            } catch (_: Exception) { }
         }
     }
 

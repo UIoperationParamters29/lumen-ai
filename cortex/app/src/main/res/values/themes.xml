@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Base app theme (post-splash) -->
     <style name="Theme.Cortex" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/bg_primary</item>
         <item name="android:colorBackground">@color/bg_primary</item>
@@ -9,7 +10,10 @@
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
-    <style name="Theme.Cortex.Splash" parent="Theme.Cortex">
-        <item name="android:windowBackground">@drawable/splash_background</item>
+    <!-- Splash screen theme — MUST inherit from Theme.SplashScreen -->
+    <style name="Theme.Cortex.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Cortex</item>
     </style>
 </resources>

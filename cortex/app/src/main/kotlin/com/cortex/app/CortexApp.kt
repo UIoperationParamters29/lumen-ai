@@ -1,6 +1,7 @@
 package com.cortex.app
 
 import android.app.Application
+import android.util.Log
 import com.cortex.app.data.model.ChatEntity
 import com.cortex.app.data.model.GatewayEntity
 import com.cortex.app.data.model.MessageEntity
@@ -37,17 +38,24 @@ class CortexApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        settingsStore = SettingsStore(this)
-        gatewayClient = GatewayClient()
-        webSearchProvider = WebSearchProvider()
+        try {
+            Log.d("Cortex", "CortexApp.onCreate() starting")
+            settingsStore = SettingsStore(this)
+            gatewayClient = GatewayClient()
+            webSearchProvider = WebSearchProvider()
 
-        gatewayStore = FileStore(this, "gateways.json", GatewayEntity.serializer())
-        chatStore = FileStore(this, "chats.json", ChatEntity.serializer())
-        messageStore = FileStore(this, "messages.json", MessageEntity.serializer())
+            gatewayStore = FileStore(this, "gateways.json", GatewayEntity.serializer())
+            chatStore = FileStore(this, "chats.json", ChatEntity.serializer())
+            messageStore = FileStore(this, "messages.json", MessageEntity.serializer())
 
-        gatewayRepo = GatewayRepository(settingsStore, gatewayClient, gatewayStore)
-        settingsRepo = SettingsRepository(settingsStore)
-        chatRepo = ChatRepository(chatStore, messageStore, gatewayStore, gatewayClient, webSearchProvider, settingsStore)
+            gatewayRepo = GatewayRepository(settingsStore, gatewayClient, gatewayStore)
+            settingsRepo = SettingsRepository(settingsStore)
+            chatRepo = ChatRepository(chatStore, messageStore, gatewayStore, gatewayClient, webSearchProvider, settingsStore)
+            Log.d("Cortex", "CortexApp.onCreate() complete")
+        } catch (e: Exception) {
+            Log.e("Cortex", "FATAL: CortexApp.onCreate() failed", e)
+            throw e
+        }
     }
 
     companion object {

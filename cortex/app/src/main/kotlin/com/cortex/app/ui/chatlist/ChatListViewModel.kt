@@ -8,19 +8,15 @@ import com.cortex.app.data.model.GatewayEntity
 import com.cortex.app.data.repo.ChatRepository
 import com.cortex.app.data.repo.GatewayRepository
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class ChatListState(
     val chats: List<ChatEntity> = emptyList(),
     val defaultGateway: GatewayEntity? = null,
-    val availableModels: List<String> = emptyList(),
     val searchQuery: String = "",
     val isCreating: Boolean = false,
     val error: String? = null
@@ -36,25 +32,25 @@ class ChatListViewModel(
     val state: StateFlow<ChatListState> = _state.asStateFlow()
 
     init {
+        // Combine chats + search query → filtered list
         viewModelScope.launch {
-            // Observe chats
-            chatRepo.observeChats().collect { chats ->
-                _state.update { it.copy(chats = chats.filter { c ->
-                    if (_search.value.isBlank()) true
-                    else c.title.contains(_search.value, ignoreCase = true)
-                }) }
+            chatRepo.observeChats().combine(_search) { chats, query ->
+                if (query.isBlank()) chats
+                else chats.filter { it.title.contains(query, ignoreCase = true) }
+            }.collect { filtered ->
+                _state.update { it.copy(chats = filtered) }
             }
         }
+        // Track search query in state
         viewModelScope.launch {
-            // Watch search
-            _search.collect { q ->
-                _state.update { it.copy(searchQuery = q) }
-            }
+            _search.collect { q -> _state.update { it.copy(searchQuery = q) } }
         }
+        // Load default gateway
         viewModelScope.launch {
-            // Ensure default gateway is loaded
-            val gw = gatewayRepo.getDefaultGateway()
-            _state.update { it.copy(defaultGateway = gw) }
+            try {
+                val gw = gatewayRepo.getDefaultGateway()
+                _state.update { it.copy(defaultGateway = gw) }
+            } catch (_: Exception) { }
         }
     }
 
@@ -74,33 +70,32 @@ class ChatListViewModel(
         }
     }
 
-    /**
-     * Create a new chat using the default gateway + cached default model.
-     * Returns the new chat id (passed to onNewChat callback).
-     */
     fun createNewChat(onCreated: (Long) -> Unit) {
         val gw = _state.value.defaultGateway
         if (gw == null) {
-            _state.update { it.copy(error = "No gateway configured. Add one in Settings.") }
+            _state.update { it.copy(error = "No gateway configured. Add one in Settings first.") }
             return
         }
         viewModelScope.launch {
-            _state.update { it.copy(isCreating = true) }
-            val models = gatewayRepo.fetchAndCacheModels(gw)
-            val preferred = gatewayRepo.let { _ ->
-                // Use cached default model or first model
-                com.cortex.app.CortexApp.instance.settingsStore.getDefaultModel(gw.id)
+            _state.update { it.copy(isCreating = true, error = null) }
+            try {
+                // Try to fetch models, but don't block on failure
+                val models = try { gatewayRepo.fetchAndCacheModels(gw) } catch (_: Exception) { gatewayRepo.getCachedModels(gw.id) }
+                val preferred = com.cortex.app.CortexApp.instance.settingsStore.getDefaultModel(gw.id)
                     ?: models.firstOrNull()?.id
                     ?: "gpt-4o-mini"
+                val wsConfig = com.cortex.app.CortexApp.instance.settingsStore.webSearchConfig
+                val id = chatRepo.createChat(
+                    title = "New Chat",
+                    gatewayId = gw.id,
+                    model = preferred,
+                    webSearchEnabled = wsConfig.provider != com.cortex.app.data.model.SearchProvider.DISABLED
+                )
+                _state.update { it.copy(isCreating = false) }
+                onCreated(id)
+            } catch (e: Exception) {
+                _state.update { it.copy(isCreating = false, error = "Failed to create chat: ${e.message}") }
             }
-            val id = chatRepo.createChat(
-                title = "New Chat",
-                gatewayId = gw.id,
-                model = preferred,
-                webSearchEnabled = com.cortex.app.CortexApp.instance.settingsStore.webSearchConfig.let { it.provider != com.cortex.app.data.model.SearchProvider.DISABLED }
-            )
-            _state.update { it.copy(isCreating = false) }
-            onCreated(id)
         }
     }
 
