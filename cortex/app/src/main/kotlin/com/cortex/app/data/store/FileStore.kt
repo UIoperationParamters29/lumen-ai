@@ -7,6 +7,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
@@ -34,7 +36,7 @@ class FileStore<T>(
     val flow = _flow.asStateFlow()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val mutex = kotlinx.coroutines.sync.Mutex()
+    private val mutex = Mutex()
     @Volatile private var loaded = false
 
     init {
@@ -46,7 +48,7 @@ class FileStore<T>(
 
     suspend fun load(): List<T> {
         if (loaded) return _flow.value
-        return kotlinx.coroutines.sync.withLock {
+        return mutex.withLock {
             if (loaded) return@withLock _flow.value
             val f = file()
             val data = if (!f.exists()) {
@@ -62,12 +64,12 @@ class FileStore<T>(
         }
     }
 
-    suspend fun saveAll(items: List<T>) = kotlinx.coroutines.sync.withLock {
+    suspend fun saveAll(items: List<T>) = mutex.withLock {
         file().writeText(json.encodeToString(listSerializer, items))
         _flow.value = items
     }
 
-    suspend fun mutate(transform: (List<T>) -> List<T>): List<T> = kotlinx.coroutines.sync.withLock {
+    suspend fun mutate(transform: (List<T>) -> List<T>): List<T> = mutex.withLock {
         // Ensure loaded
         if (!loaded) {
             val f = file()
