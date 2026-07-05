@@ -38,12 +38,16 @@ class GatewayRepository(
     private var nextId: Long = 1L
 
     suspend fun addGateway(name: String, baseUrl: String, apiKey: String, makeDefault: Boolean = false): Long {
+        android.util.Log.d("Cortex", "GatewayRepo.addGateway: name=$name, url=$baseUrl, makeDefault=$makeDefault")
         store.load()
         val id = (store.flow.value.maxOfOrNull { it.id } ?: 0L) + 1L
         val entity = GatewayEntity(id = id, name = name, baseUrl = baseUrl, apiKey = apiKey, isDefault = false)
+        android.util.Log.d("Cortex", "GatewayRepo.addGateway: creating entity id=$id")
         store.add(entity)
+        android.util.Log.d("Cortex", "GatewayRepo.addGateway: store.add done, flow size=${store.flow.value.size}")
         if (makeDefault || store.flow.value.size == 1) {
             setDefault(id)
+            android.util.Log.d("Cortex", "GatewayRepo.addGateway: set default done")
         }
         return id
     }

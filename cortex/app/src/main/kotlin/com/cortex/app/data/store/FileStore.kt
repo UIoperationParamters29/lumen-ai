@@ -80,8 +80,10 @@ class FileStore<T>(
         }
         val current = _flow.value
         val updated = transform(current)
-        file().writeText(json.encodeToString(listSerializer, updated))
+        val jsonStr = json.encodeToString(listSerializer, updated)
+        file().writeText(jsonStr)
         _flow.value = updated
+        android.util.Log.d("Cortex", "FileStore[$fileName]: saved ${updated.size} items, ${jsonStr.length} bytes")
         updated
     }
 

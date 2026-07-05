@@ -184,20 +184,27 @@ class WebSearchProvider {
 
     /**
      * Build a system-prompt snippet that injects search results so the model
-     * can ground its answer. This is the simplest, most portable approach
-     * that works with any OpenAI-compatible gateway without requiring tool-calling support.
+     * can ground its answer. Optimized for clarity — the AI sees structured
+     * results with numbered citations and clear instructions.
      */
     fun formatResultsForPrompt(query: String, results: List<SearchResult>): String {
         if (results.isEmpty()) return ""
         val sb = StringBuilder()
-        sb.append("Web search results for \"$query\":\n\n")
+        sb.append("═══ WEB SEARCH RESULTS ═══\n")
+        sb.append("Query: \"$query\"\n\n")
         results.forEachIndexed { i, r ->
             sb.append("[${i + 1}] ${r.title}\n")
-            sb.append("URL: ${r.url}\n")
-            if (r.snippet.isNotBlank()) sb.append("Snippet: ${r.snippet}\n")
+            sb.append("    Source: ${r.url}\n")
+            if (r.snippet.isNotBlank()) {
+                sb.append("    Content: ${r.snippet}\n")
+            }
             sb.append("\n")
         }
-        sb.append("Use these results to inform your answer. Cite sources by [number] where relevant.")
+        sb.append("═══ END SEARCH RESULTS ═══\n\n")
+        sb.append("Instructions: Use the above web search results to answer the user's question. ")
+        sb.append("Cite sources using [1], [2], etc. format. ")
+        sb.append("If the results don't contain relevant information, say so and answer from your own knowledge. ")
+        sb.append("Synthesize information across multiple sources when possible.")
         return sb.toString()
     }
 }

@@ -152,7 +152,7 @@ fun ChatListScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No chats match \"$state.searchQuery\"", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    Text("No chats match \"${state.searchQuery}\"", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
                 LazyColumn(

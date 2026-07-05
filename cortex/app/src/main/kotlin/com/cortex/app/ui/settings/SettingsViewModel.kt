@@ -1,9 +1,11 @@
 package com.cortex.app.ui.settings
 
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.cortex.app.CortexApp
 import com.cortex.app.data.model.GatewayEntity
 import com.cortex.app.data.model.ModelInfo
 import com.cortex.app.data.model.SearchProvider
@@ -29,7 +31,8 @@ data class SettingsState(
     val editingGateway: GatewayEntity? = null,
     val showGatewayEditor: Boolean = false,
     val saving: Boolean = false,
-    val saveError: String? = null
+    val saveError: String? = null,
+    val saveSuccess: Boolean = false
 )
 
 class SettingsViewModel(
@@ -49,21 +52,44 @@ class SettingsViewModel(
     init {
         viewModelScope.launch {
             gatewayRepo.observeGateways().collect { gws ->
+                Log.d("Cortex", "SettingsVM: gateways updated, count=${gws.size}")
                 _state.update { it.copy(gateways = gws) }
             }
         }
     }
 
     fun openGatewayEditor(gateway: GatewayEntity? = null) {
-        _state.update { it.copy(editingGateway = gateway, showGatewayEditor = true, testResult = null, testModels = emptyList(), saveError = null) }
+        Log.d("Cortex", "openGatewayEditor, existing=${gateway?.id}")
+        _state.update {
+            it.copy(
+                editingGateway = gateway,
+                showGatewayEditor = true,
+                testResult = null,
+                testModels = emptyList(),
+                saveError = null,
+                saveSuccess = false
+            )
+        }
     }
 
     fun closeGatewayEditor() {
-        if (_state.value.saving) return // prevent dismiss during save
-        _state.update { it.copy(editingGateway = null, showGatewayEditor = false, testResult = null, testModels = emptyList(), saveError = null) }
+        Log.d("Cortex", "closeGatewayEditor, saving=${_state.value.saving}")
+        // Always allow closing — even during save (user can cancel)
+        _state.update {
+            it.copy(
+                editingGateway = null,
+                showGatewayEditor = false,
+                testResult = null,
+                testModels = emptyList(),
+                saveError = null,
+                saving = false,
+                saveSuccess = false
+            )
+        }
     }
 
     fun testGateway(baseUrl: String, apiKey: String) {
+        Log.d("Cortex", "testGateway: url=$baseUrl")
         viewModelScope.launch {
             _state.update { it.copy(testing = true, testResult = null, testModels = emptyList()) }
             val result = gatewayRepo.testConnection(baseUrl, apiKey)
@@ -86,13 +112,18 @@ class SettingsViewModel(
                     )
                 }
             }.onFailure { e ->
+                Log.e("Cortex", "Test failed", e)
                 _state.update { it.copy(testing = false, testResult = "✗ ${e.message ?: "Connection failed"}") }
             }
         }
     }
 
     fun saveGateway(name: String, baseUrl: String, apiKey: String, existing: GatewayEntity?) {
+        Log.d("Cortex", "=== saveGateway START ===")
+        Log.d("Cortex", "saveGateway: name=$name, url=$baseUrl, existing=${existing?.id}")
+
         if (name.isBlank() || baseUrl.isBlank() || apiKey.isBlank()) {
+            Log.w("Cortex", "saveGateway: validation failed — blank fields")
             _state.update { it.copy(saveError = "All fields are required") }
             return
         }
@@ -100,49 +131,60 @@ class SettingsViewModel(
         viewModelScope.launch {
             _state.update { it.copy(saving = true, saveError = null) }
             try {
-                Log.d("Cortex", "Saving gateway: name=$name, url=$baseUrl, existing=${existing?.id}")
                 val gatewayId: Long
                 if (existing == null) {
-                    // Check existing gateways from the store (not just state which may be stale)
+                    // Create new
                     val allGateways = gatewayRepo.getAllGateways()
                     val isFirst = allGateways.isEmpty()
+                    Log.d("Cortex", "saveGateway: creating new, isFirst=$isFirst, existingCount=${allGateways.size}")
                     gatewayId = gatewayRepo.addGateway(name, baseUrl, apiKey, makeDefault = isFirst)
-                    Log.d("Cortex", "Created new gateway with id=$gatewayId")
+                    Log.d("Cortex", "saveGateway: created with id=$gatewayId")
                 } else {
                     gatewayRepo.updateGateway(existing.copy(name = name, baseUrl = baseUrl, apiKey = apiKey))
                     gatewayId = existing.id
-                    Log.d("Cortex", "Updated gateway id=$gatewayId")
-                }
-
-                // Auto-fetch and cache models so model picker works immediately
-                try {
-                    val savedGw = gatewayRepo.getGateway(gatewayId)
-                    if (savedGw != null) {
-                        val models = gatewayRepo.fetchAndCacheModels(savedGw)
-                        Log.d("Cortex", "Cached ${models.size} models for gateway $gatewayId")
-                        // Set a default model if none set
-                        val currentDefault = com.cortex.app.CortexApp.instance.settingsStore.getDefaultModel(gatewayId)
-                        if (currentDefault == null && models.isNotEmpty()) {
-                            com.cortex.app.CortexApp.instance.settingsStore.setDefaultModel(gatewayId, models.first().id)
-                            Log.d("Cortex", "Set default model: ${models.first().id}")
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.w("Cortex", "Model fetch failed (non-fatal): ${e.message}")
-                    // Don't fail the save if model fetch fails
+                    Log.d("Cortex", "saveGateway: updated id=$gatewayId")
                 }
 
                 // Verify the save worked
                 val verify = gatewayRepo.getGateway(gatewayId)
                 if (verify == null) {
-                    _state.update { it.copy(saving = false, saveError = "Failed to save gateway") }
+                    Log.e("Cortex", "saveGateway: verify FAILED — gateway not found after save!")
+                    _state.update { it.copy(saving = false, saveError = "Failed to save gateway — please try again") }
                     return@launch
                 }
+                Log.d("Cortex", "saveGateway: verify OK — ${verify.name}, url=${verify.baseUrl}")
 
-                Log.d("Cortex", "Gateway saved and verified: ${verify.name}")
-                _state.update { it.copy(saving = false, showGatewayEditor = false, editingGateway = null, testResult = null, testModels = emptyList(), saveError = null) }
+                // Auto-fetch and cache models
+                try {
+                    val models = gatewayRepo.fetchAndCacheModels(verify)
+                    Log.d("Cortex", "saveGateway: cached ${models.size} models")
+                    val currentDefault = CortexApp.instance.settingsStore.getDefaultModel(gatewayId)
+                    if (currentDefault == null && models.isNotEmpty()) {
+                        CortexApp.instance.settingsStore.setDefaultModel(gatewayId, models.first().id)
+                        Log.d("Cortex", "saveGateway: set default model=${models.first().id}")
+                    }
+                } catch (e: Exception) {
+                    Log.w("Cortex", "saveGateway: model fetch failed (non-fatal): ${e.message}")
+                }
+
+                // Show success toast
+                Toast.makeText(CortexApp.instance, "Gateway saved", Toast.LENGTH_SHORT).show()
+
+                Log.d("Cortex", "=== saveGateway SUCCESS ===")
+                _state.update {
+                    it.copy(
+                        saving = false,
+                        showGatewayEditor = false,
+                        editingGateway = null,
+                        testResult = null,
+                        testModels = emptyList(),
+                        saveError = null,
+                        saveSuccess = true
+                    )
+                }
             } catch (e: Exception) {
-                Log.e("Cortex", "Save gateway failed", e)
+                Log.e("Cortex", "=== saveGateway FAILED ===", e)
+                Toast.makeText(CortexApp.instance, "Save failed: ${e.message}", Toast.LENGTH_LONG).show()
                 _state.update { it.copy(saving = false, saveError = "Save failed: ${e.message ?: "Unknown error"}") }
             }
         }

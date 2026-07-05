@@ -36,6 +36,14 @@ fun SettingsScreen(
     onBack: () -> Unit
 ) {
     val state by vm.state.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Show toast on save success
+    androidx.compose.runtime.LaunchedEffect(state.saveSuccess) {
+        if (state.saveSuccess) {
+            android.widget.Toast.makeText(context, "Gateway saved successfully", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -364,7 +372,7 @@ private fun GatewayEditorDialog(
     var showKey by remember { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = { if (!saving) onDismiss() },
+        onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CortexOrb(size = 24.dp, pulse = false)
@@ -483,7 +491,7 @@ private fun GatewayEditorDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel", color = TextSecondary) }
+            TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) }
         },
         containerColor = BgElevated
     )

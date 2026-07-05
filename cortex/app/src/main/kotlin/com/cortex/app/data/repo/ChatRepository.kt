@@ -152,12 +152,18 @@ class ChatRepository(
             var searchResultsJson: String? = null
             if (chat.webSearchEnabled) {
                 val config = settingsStore.webSearchConfig
+                android.util.Log.d("Cortex", "Web search enabled, provider=${config.provider}")
                 if (config.provider != com.cortex.app.data.model.SearchProvider.DISABLED) {
-                    val results = webSearchProvider.search(userText, config)
-                    if (results.isNotEmpty()) {
-                        onSearchResults(results)
-                        _streamState.value = _streamState.value.copy(searchResults = results)
-                        searchResultsJson = serializeSearchResults(results)
+                    try {
+                        val results = webSearchProvider.search(userText, config)
+                        android.util.Log.d("Cortex", "Web search returned ${results.size} results")
+                        if (results.isNotEmpty()) {
+                            onSearchResults(results)
+                            _streamState.value = _streamState.value.copy(searchResults = results)
+                            searchResultsJson = serializeSearchResults(results)
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w("Cortex", "Web search failed (non-fatal): ${e.message}")
                     }
                 }
             }
