@@ -1,15 +1,15 @@
 package com.cortex.app.ui.settings
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +25,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.cortex.app.data.model.GatewayEntity
 import com.cortex.app.data.model.SearchProvider
+import com.cortex.app.ui.components.CortexOrb
+import com.cortex.app.ui.components.GlassCard
 import com.cortex.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,14 +40,21 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings", color = TextPrimary, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold) },
+                title = {
+                    Text(
+                        "Settings",
+                        color = TextPrimary,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Rounded.ArrowBack, null, tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, null, tint = TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BgPrimary,
+                    containerColor = Color.Transparent,
                     titleContentColor = TextPrimary,
                     navigationIconContentColor = TextPrimary
                 )
@@ -58,9 +67,10 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
+                .padding(bottom = 32.dp)
         ) {
-            // === GATEWAYS SECTION ===
-            SectionHeader("Gateways", "Configure your AI providers")
+            // === GATEWAYS ===
+            SectionHeader("Gateways", "Your AI providers")
             state.gateways.forEach { gw ->
                 GatewayRow(
                     gateway = gw,
@@ -72,8 +82,8 @@ fun SettingsScreen(
             AddGatewayButton(onClick = { vm.openGatewayEditor(null) })
             Spacer(Modifier.height(24.dp))
 
-            // === WEB SEARCH SECTION ===
-            SectionHeader("Web Search", "Ground responses with live web results")
+            // === WEB SEARCH ===
+            SectionHeader("Web Search", "Ground responses with live results")
             WebSearchSection(
                 config = state.webSearchConfig,
                 onProviderChange = vm::updateSearchProvider,
@@ -83,32 +93,12 @@ fun SettingsScreen(
             )
             Spacer(Modifier.height(24.dp))
 
-            // === CHAT BEHAVIOR ===
+            // === CHAT ===
             SectionHeader("Chat", "Streaming and behavior")
-            ToggleRow(
-                title = "Streaming responses",
-                subtitle = "Show tokens as they arrive",
-                checked = state.streamingEnabled,
-                onCheckedChange = vm::setStreamingEnabled
-            )
-            ToggleRow(
-                title = "Show thinking by default",
-                subtitle = "Expand reasoning panel automatically",
-                checked = state.showThinkingDefault,
-                onCheckedChange = vm::setShowThinkingDefault
-            )
-            ToggleRow(
-                title = "Send on Enter",
-                subtitle = "Press Enter to send, Shift+Enter for newline",
-                checked = state.sendOnEnter,
-                onCheckedChange = vm::setSendOnEnter
-            )
-            ToggleRow(
-                title = "Auto-title chats",
-                subtitle = "Rename chats from your first message",
-                checked = state.autoTitle,
-                onCheckedChange = vm::setAutoTitle
-            )
+            ToggleRow("Streaming responses", "Show tokens as they arrive", state.streamingEnabled, vm::setStreamingEnabled)
+            ToggleRow("Show thinking by default", "Expand reasoning automatically", state.showThinkingDefault, vm::setShowThinkingDefault)
+            ToggleRow("Send on Enter", "Enter to send, Shift+Enter for newline", state.sendOnEnter, vm::setSendOnEnter)
+            ToggleRow("Auto-title chats", "Rename from first message", state.autoTitle, vm::setAutoTitle)
             Spacer(Modifier.height(24.dp))
 
             // === ABOUT ===
@@ -123,6 +113,9 @@ fun SettingsScreen(
             existing = state.editingGateway,
             testing = state.testing,
             testResult = state.testResult,
+            testModels = state.testModels,
+            saving = state.saving,
+            saveError = state.saveError,
             onSave = { name, url, key -> vm.saveGateway(name, url, key, state.editingGateway) },
             onTest = vm::testGateway,
             onClearTest = vm::clearTestResult,
@@ -153,29 +146,30 @@ private fun GatewayRow(
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    Surface(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .padding(horizontal = 16.dp, vertical = 3.dp)
             .clickable { onEdit() },
-        color = BgSurface,
-        shape = RoundedCornerShape(12.dp)
+        cornerRadius = 12.dp
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Gateway icon orb
+            CortexOrb(size = 32.dp, pulse = false)
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(gateway.name, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
                     if (gateway.isDefault) {
                         Spacer(Modifier.width(8.dp))
                         Surface(
-                            color = AccentCyan.copy(alpha = 0.15f),
+                            color = AccentGreen.copy(alpha = 0.15f),
                             shape = RoundedCornerShape(4.dp)
                         ) {
-                            Text("Default", style = MaterialTheme.typography.labelSmall, color = AccentCyan, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                            Text("Default", style = MaterialTheme.typography.labelSmall, color = AccentGreen, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                         }
                     }
                 }
@@ -183,27 +177,15 @@ private fun GatewayRow(
                 Text(gateway.baseUrl, style = MaterialTheme.typography.bodySmall, color = TextSecondary, maxLines = 1)
                 Text("••••••••${gateway.apiKey.takeLast(4)}", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
             }
-            IconButton(onClick = { showMenu = true }) {
-                Icon(Icons.Rounded.MoreVert, null, tint = TextTertiary)
+            IconButton(onClick = { showMenu = true }, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Rounded.MoreVert, null, tint = TextTertiary, modifier = Modifier.size(18.dp))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 if (!gateway.isDefault) {
-                    DropdownMenuItem(
-                        text = { Text("Set as default") },
-                        onClick = { showMenu = false; onSetDefault() },
-                        leadingIcon = { Icon(Icons.Rounded.Star, null) }
-                    )
+                    DropdownMenuItem(text = { Text("Set as default") }, onClick = { showMenu = false; onSetDefault() }, leadingIcon = { Icon(Icons.Rounded.Star, null) })
                 }
-                DropdownMenuItem(
-                    text = { Text("Edit") },
-                    onClick = { showMenu = false; onEdit() },
-                    leadingIcon = { Icon(Icons.Rounded.Edit, null) }
-                )
-                DropdownMenuItem(
-                    text = { Text("Delete", color = StatusError) },
-                    onClick = { showMenu = false; onDelete() },
-                    leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = StatusError) }
-                )
+                DropdownMenuItem(text = { Text("Edit") }, onClick = { showMenu = false; onEdit() }, leadingIcon = { Icon(Icons.Rounded.Edit, null) })
+                DropdownMenuItem(text = { Text("Delete", color = StatusError) }, onClick = { showMenu = false; onDelete() }, leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = StatusError) })
             }
         }
     }
@@ -211,21 +193,21 @@ private fun GatewayRow(
 
 @Composable
 private fun AddGatewayButton(onClick: () -> Unit) {
-    Surface(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .padding(horizontal = 16.dp, vertical = 3.dp)
             .clickable(onClick = onClick),
-        color = BgSurface.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(12.dp)
+        cornerRadius = 12.dp,
+        gradient = Brush.linearGradient(listOf(AccentBlue.copy(alpha = 0.08f), BgSurface.copy(alpha = 0.5f))),
+        borderGradient = Brush.linearGradient(listOf(AccentBlue.copy(alpha = 0.3f), Color.Transparent))
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            Icon(Icons.Rounded.Add, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.Add, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
             Text("Add Gateway", style = MaterialTheme.typography.titleMedium, color = AccentBlue, fontWeight = FontWeight.Medium)
         }
@@ -241,23 +223,23 @@ private fun WebSearchSection(
     onUrlChange: (String) -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        // Provider selector
         SearchProvider.entries.forEach { provider ->
-            Surface(
+            val selected = config.provider == provider
+            GlassCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 3.dp)
-                    .clip(RoundedCornerShape(10.dp))
                     .clickable { onProviderChange(provider) },
-                color = if (config.provider == provider) AccentBlue.copy(alpha = 0.12f) else BgSurface,
-                shape = RoundedCornerShape(10.dp)
+                cornerRadius = 10.dp,
+                gradient = if (selected) Brush.linearGradient(listOf(AccentBlue.copy(alpha = 0.12f), BgSurface.copy(alpha = 0.6f))) else CardGradient,
+                borderGradient = if (selected) Brush.linearGradient(listOf(AccentBlue.copy(alpha = 0.4f), Color.Transparent)) else GlassGradient
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     RadioButton(
-                        selected = config.provider == provider,
+                        selected = selected,
                         onClick = { onProviderChange(provider) },
                         colors = RadioButtonDefaults.colors(selectedColor = AccentBlue, unselectedColor = TextTertiary)
                     )
@@ -276,47 +258,36 @@ private fun WebSearchSection(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        // Max results slider (hidden if disabled)
         if (config.provider != SearchProvider.DISABLED) {
+            Spacer(Modifier.height(12.dp))
             Text("Max Results: ${config.maxResults}", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
             Slider(
                 value = config.maxResults.toFloat(),
                 onValueChange = { onMaxChange(it.toInt()) },
-                valueRange = 1f..10f,
-                steps = 8,
+                valueRange = 1f..10f, steps = 8,
                 colors = SliderDefaults.colors(thumbColor = AccentCyan, activeTrackColor = AccentCyan, inactiveTrackColor = BorderSubtle)
             )
-            Spacer(Modifier.height(8.dp))
         }
 
-        // API key field (Exa, Firecrawl)
         if (config.provider.requiresKey) {
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
-                value = config.apiKey,
-                onValueChange = onKeyChange,
-                label = { Text("Provider API Key") },
-                singleLine = true,
+                value = config.apiKey, onValueChange = onKeyChange,
+                label = { Text("Provider API Key") }, singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                colors = outTextFieldColors(),
-                shape = RoundedCornerShape(12.dp),
+                colors = outTextFieldColors(), shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.height(8.dp))
         }
 
-        // Instance URL field (SearXNG)
         if (config.provider.requiresInstance) {
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
-                value = config.instanceUrl,
-                onValueChange = onUrlChange,
-                label = { Text("Instance URL (e.g. https://searx.example.com)") },
-                singleLine = true,
+                value = config.instanceUrl, onValueChange = onUrlChange,
+                label = { Text("Instance URL") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                colors = outTextFieldColors(),
-                shape = RoundedCornerShape(12.dp),
+                colors = outTextFieldColors(), shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -324,19 +295,12 @@ private fun WebSearchSection(
 }
 
 @Composable
-private fun ToggleRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Surface(
+private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 3.dp)
-            .clip(RoundedCornerShape(10.dp)),
-        color = BgSurface,
-        shape = RoundedCornerShape(10.dp)
+            .padding(horizontal = 16.dp, vertical = 3.dp),
+        cornerRadius = 10.dp
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -347,13 +311,10 @@ private fun ToggleRow(
                 Text(subtitle, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
             }
             Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
+                checked = checked, onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = AccentBlue,
-                    uncheckedThumbColor = TextTertiary,
-                    uncheckedTrackColor = BgSurfaceHigh
+                    checkedThumbColor = Color.White, checkedTrackColor = AccentBlue,
+                    uncheckedThumbColor = TextTertiary, uncheckedTrackColor = BgSurfaceHigh
                 )
             )
         }
@@ -362,26 +323,25 @@ private fun ToggleRow(
 
 @Composable
 private fun AboutSection() {
-    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Brush.radialGradient(listOf(OrbStart, OrbMid, OrbEnd)))
-            )
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("Cortex", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                Text("Version 1.0.0", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+    GlassCard(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        cornerRadius = 14.dp
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CortexOrb(size = 40.dp)
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Cortex", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("Version 1.2.0", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                }
             }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Bring your own key. Stream thoughts. Stay in flow. Built with native Kotlin + Jetpack Compose for maximum performance.",
+                style = MaterialTheme.typography.bodySmall, color = TextSecondary
+            )
         }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "Bring your own key. Stream thoughts. Stay in flow. Built with native Kotlin + Jetpack Compose for maximum performance.",
-            style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary
-        )
     }
 }
 
@@ -390,6 +350,9 @@ private fun GatewayEditorDialog(
     existing: GatewayEntity?,
     testing: Boolean,
     testResult: String?,
+    testModels: List<com.cortex.app.data.model.ModelInfo>,
+    saving: Boolean,
+    saveError: String?,
     onSave: (String, String, String) -> Unit,
     onTest: (String, String) -> Unit,
     onClearTest: () -> Unit,
@@ -401,60 +364,54 @@ private fun GatewayEditorDialog(
     var showKey by remember { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (existing == null) "Add Gateway" else "Edit Gateway", color = TextPrimary) },
+        onDismissRequest = { if (!saving) onDismiss() },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CortexOrb(size = 24.dp, pulse = false)
+                Spacer(Modifier.width(8.dp))
+                Text(if (existing == null) "Add Gateway" else "Edit Gateway", color = TextPrimary)
+            }
+        },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text("Name", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                 OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    placeholder = { Text("My Gateway") },
-                    singleLine = true,
-                    colors = outTextFieldColors(),
-                    shape = RoundedCornerShape(10.dp),
+                    value = name, onValueChange = { name = it },
+                    placeholder = { Text("My Gateway") }, singleLine = true,
+                    colors = outTextFieldColors(), shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(10.dp))
                 Text("Base URL", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                 OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    placeholder = { Text("https://api.openai.com/v1") },
-                    singleLine = true,
+                    value = url, onValueChange = { url = it },
+                    placeholder = { Text("https://api.openai.com/v1") }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    colors = outTextFieldColors(),
-                    shape = RoundedCornerShape(10.dp),
+                    colors = outTextFieldColors(), shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(10.dp))
                 Text("API Key", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                 OutlinedTextField(
-                    value = key,
-                    onValueChange = { key = it },
-                    placeholder = { Text("sk-...") },
-                    singleLine = true,
+                    value = key, onValueChange = { key = it },
+                    placeholder = { Text("sk-...") }, singleLine = true,
                     visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     trailingIcon = {
                         IconButton(onClick = { showKey = !showKey }) {
-                            Icon(
-                                if (showKey) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                                null,
-                                tint = TextTertiary
-                            )
+                            Icon(if (showKey) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, null, tint = TextTertiary)
                         }
                     },
-                    colors = outTextFieldColors(),
-                    shape = RoundedCornerShape(10.dp),
+                    colors = outTextFieldColors(), shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(12.dp))
 
+                // Test button
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedButton(
                         onClick = { onTest(url, key) },
-                        enabled = !testing && url.isNotBlank() && key.isNotBlank(),
+                        enabled = !testing && !saving && url.isNotBlank() && key.isNotBlank(),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan),
                         shape = RoundedCornerShape(10.dp)
                     ) {
@@ -479,20 +436,54 @@ private fun GatewayEditorDialog(
                         }
                     }
                 }
+
+                // Show fetched models
+                if (testModels.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Text("${testModels.size} models available", style = MaterialTheme.typography.labelMedium, color = AccentGreen)
+                    Spacer(Modifier.height(4.dp))
+                    testModels.take(5).forEach { m ->
+                        Text("• ${m.displayName ?: m.id}", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    }
+                    if (testModels.size > 5) {
+                        Text("…and ${testModels.size - 5} more", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                    }
+                }
+
+                // Save error
+                AnimatedVisibility(visible = saveError != null) {
+                    Column {
+                        Spacer(Modifier.height(8.dp))
+                        Surface(color = StatusError.copy(alpha = 0.12f), shape = RoundedCornerShape(8.dp)) {
+                            Text(
+                                saveError ?: "",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = StatusError,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = { onSave(name.trim(), url.trim().trimEnd('/'), key.trim()) },
-                enabled = name.isNotBlank() && url.isNotBlank() && key.isNotBlank(),
+                enabled = !saving && name.isNotBlank() && url.isNotBlank() && key.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.White),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Save")
+                if (saving) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 1.5.dp, color = Color.White)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Saving…")
+                } else {
+                    Text("Save")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) }
+            TextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel", color = TextSecondary) }
         },
         containerColor = BgElevated
     )

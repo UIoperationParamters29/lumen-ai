@@ -1,18 +1,22 @@
 package com.cortex.app.ui.chatlist
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,8 +27,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.cortex.app.data.model.ChatEntity
+import com.cortex.app.ui.components.CortexOrb
+import com.cortex.app.ui.components.GlassCard
 import com.cortex.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,22 +50,15 @@ fun ChatListScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(
-                                    Brush.radialGradient(
-                                        colors = listOf(OrbStart, OrbMid, OrbEnd)
-                                    )
-                                )
-                        )
+                        CortexOrb(size = 30.dp)
                         Spacer(Modifier.width(10.dp))
-                        Text(
-                            "Cortex",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Column {
+                            Text(
+                                "Cortex",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -72,9 +70,8 @@ fun ChatListScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BgPrimary,
+                    containerColor = Color.Transparent,
                     titleContentColor = TextPrimary,
-                    navigationIconContentColor = TextPrimary,
                     actionIconContentColor = TextPrimary
                 )
             )
@@ -82,7 +79,7 @@ fun ChatListScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { vm.createNewChat(onNewChat) },
-                containerColor = Brush.linearGradient(listOf(AccentBlue, AccentCyan)).let { _ -> AccentBlue },
+                containerColor = AccentBlue,
                 contentColor = Color.White,
                 icon = { Icon(Icons.Rounded.Add, null) },
                 text = { Text("New Chat", fontWeight = FontWeight.SemiBold) },
@@ -94,40 +91,74 @@ fun ChatListScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            AccentBlue.copy(alpha = 0.03f),
+                            BgPrimary,
+                            BgPrimary
+                        )
+                    )
+                )
                 .padding(padding)
         ) {
-            if (showSearch) {
-                OutlinedTextField(
-                    value = state.searchQuery,
-                    onValueChange = vm::setSearch,
-                    placeholder = { Text("Search chats…", color = TextTertiary) },
-                    leadingIcon = { Icon(Icons.Rounded.Search, null, tint = TextTertiary) },
-                    trailingIcon = {
-                        if (state.searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { vm.setSearch("") }) {
-                                Icon(Icons.Rounded.Close, null, tint = TextTertiary)
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    colors = outTextFieldColors(),
+            AnimatedVisibility(
+                visible = showSearch,
+                enter = fadeIn() + scaleIn(initialScale = 0.95f),
+                exit = fadeOut() + scaleOut(targetScale = 0.95f)
+            ) {
+                GlassCard(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    cornerRadius = 14.dp
+                ) {
+                    OutlinedTextField(
+                        value = state.searchQuery,
+                        onValueChange = vm::setSearch,
+                        placeholder = { Text("Search chats…", color = TextTertiary) },
+                        leadingIcon = { Icon(Icons.Rounded.Search, null, tint = AccentCyan) },
+                        trailingIcon = {
+                            if (state.searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { vm.setSearch("") }) {
+                                    Icon(Icons.Rounded.Close, null, tint = TextTertiary)
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        colors = outTextFieldColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             if (state.error != null) {
                 ErrorBanner(state.error!!) { vm.clearError() }
             }
 
+            if (state.isCreating) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = AccentCyan,
+                    trackColor = BgSurfaceHigh
+                )
+            }
+
             if (state.chats.isEmpty() && state.searchQuery.isBlank()) {
                 EmptyChatList(defaultGateway = state.defaultGateway)
+            } else if (state.chats.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No chats match \"$state.searchQuery\"", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 8.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(state.chats, key = { it.id }) { chat ->
                         ChatRow(
@@ -135,13 +166,12 @@ fun ChatListScreen(
                             onClick = { onOpenChat(chat.id) },
                             onMenu = { menuChat = chat }
                         )
-                        HorizontalDivider(color = BorderSubtle.copy(alpha = 0.5f), thickness = 0.5.dp)
                     }
+                    item { Spacer(Modifier.height(80.dp)) }
                 }
             }
         }
 
-        // Context menu
         DropdownMenu(
             expanded = menuChat != null,
             onDismissRequest = { menuChat = null }
@@ -185,44 +215,57 @@ private fun ChatRow(
     onClick: () -> Unit,
     onMenu: () -> Unit
 ) {
-    Row(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .clickable(onClick = onClick),
+        cornerRadius = 14.dp
     ) {
-        if (chat.pinned) {
-            Icon(Icons.Rounded.PushPin, null, tint = AccentCyan, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(8.dp))
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                chat.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(2.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Pinned indicator
+            if (chat.pinned) {
+                Icon(Icons.Rounded.PushPin, null, tint = AccentCyan, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(8.dp))
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    chat.model,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = AccentCyan,
+                    chat.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
+                    fontWeight = FontWeight.Medium
                 )
-                if (chat.webSearchEnabled) {
-                    Spacer(Modifier.width(8.dp))
-                    Icon(Icons.Rounded.TravelExplore, null, tint = AccentGreen, modifier = Modifier.size(12.dp))
+                Spacer(Modifier.height(3.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Model badge
+                    Surface(
+                        color = AccentBlue.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            chat.model.take(20),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AccentCyan,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                        )
+                    }
+                    if (chat.webSearchEnabled) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Rounded.TravelExplore, null, tint = AccentGreen, modifier = Modifier.size(12.dp))
+                    }
                 }
             }
-        }
-        Spacer(Modifier.width(8.dp))
-        IconButton(onClick = onMenu) {
-            Icon(Icons.Rounded.MoreVert, null, tint = TextTertiary, modifier = Modifier.size(18.dp))
+
+            IconButton(onClick = onMenu, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Rounded.MoreVert, null, tint = TextTertiary, modifier = Modifier.size(16.dp))
+            }
         }
     }
 }
@@ -236,18 +279,8 @@ private fun EmptyChatList(defaultGateway: com.cortex.app.data.model.GatewayEntit
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .clip(RoundedCornerShape(50))
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(OrbStart, OrbMid, OrbEnd),
-                        radius = 200f
-                    )
-                )
-        )
-        Spacer(Modifier.height(24.dp))
+        CortexOrb(size = 100.dp)
+        Spacer(Modifier.height(28.dp))
         Text(
             "Welcome to Cortex",
             style = MaterialTheme.typography.headlineMedium,
@@ -263,25 +296,36 @@ private fun EmptyChatList(defaultGateway: com.cortex.app.data.model.GatewayEntit
         )
         Spacer(Modifier.height(32.dp))
         if (defaultGateway == null) {
-            Text(
-                "Add a gateway in Settings to begin.",
-                style = MaterialTheme.typography.bodySmall,
-                color = StatusWarning
-            )
+            GlassCard(
+                cornerRadius = 12.dp,
+                modifier = Modifier.padding(horizontal = 20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Rounded.Info, null, tint = StatusWarning, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Add a gateway in Settings to begin",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+            }
         }
     }
 }
 
-// (removed dead helper code)
-
 @Composable
 private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
-    Card(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = StatusError.copy(alpha = 0.15f)),
-        shape = RoundedCornerShape(12.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        cornerRadius = 12.dp,
+        gradient = Brush.linearGradient(listOf(StatusError.copy(alpha = 0.15f), StatusError.copy(alpha = 0.05f))),
+        borderGradient = Brush.linearGradient(listOf(StatusError.copy(alpha = 0.3f), Color.Transparent))
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -295,8 +339,8 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
                 color = TextPrimary,
                 modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Rounded.Close, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+            IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Rounded.Close, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
             }
         }
     }
@@ -324,8 +368,8 @@ private fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss
 
 @Composable
 fun outTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedContainerColor = BgSurfaceHigh,
-    unfocusedContainerColor = BgSurface,
+    focusedContainerColor = Color.Transparent,
+    unfocusedContainerColor = Color.Transparent,
     focusedBorderColor = AccentBlue,
     unfocusedBorderColor = BorderSubtle,
     cursorColor = AccentBlue,
