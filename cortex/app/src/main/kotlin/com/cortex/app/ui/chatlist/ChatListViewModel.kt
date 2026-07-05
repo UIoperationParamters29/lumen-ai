@@ -1,10 +1,12 @@
 package com.cortex.app.ui.chatlist
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.cortex.app.data.model.ChatEntity
 import com.cortex.app.data.model.GatewayEntity
+import com.cortex.app.data.model.ModelInfo
 import com.cortex.app.data.repo.ChatRepository
 import com.cortex.app.data.repo.GatewayRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +19,8 @@ import kotlinx.coroutines.launch
 data class ChatListState(
     val chats: List<ChatEntity> = emptyList(),
     val defaultGateway: GatewayEntity? = null,
+    val availableModels: List<ModelInfo> = emptyList(),
+    val showModelPicker: Boolean = false,
     val searchQuery: String = "",
     val isCreating: Boolean = false,
     val error: String? = null
@@ -45,12 +49,14 @@ class ChatListViewModel(
         viewModelScope.launch {
             _search.collect { q -> _state.update { it.copy(searchQuery = q) } }
         }
-        // Load default gateway
+        // CRITICAL: Observe gateways flow so defaultGateway updates live when user saves a gateway
         viewModelScope.launch {
-            try {
-                val gw = gatewayRepo.getDefaultGateway()
-                _state.update { it.copy(defaultGateway = gw) }
-            } catch (_: Exception) { }
+            gatewayRepo.observeGateways().collect { gateways ->
+                Log.d("Cortex", "ChatListVM: gateways updated, count=${gateways.size}")
+                val default = gateways.find { it.isDefault } ?: gateways.firstOrNull()
+                _state.update { it.copy(defaultGateway = default) }
+                Log.d("Cortex", "ChatListVM: defaultGateway = ${default?.name}")
+            }
         }
     }
 
@@ -70,7 +76,12 @@ class ChatListViewModel(
         }
     }
 
-    fun createNewChat(onCreated: (Long) -> Unit) {
+    /**
+     * Start the new-chat flow. Fetches models for the default gateway,
+     * then either shows the model picker (if multiple models) or creates
+     * the chat immediately (if only one model).
+     */
+    fun startNewChat() {
         val gw = _state.value.defaultGateway
         if (gw == null) {
             _state.update { it.copy(error = "No gateway configured. Add one in Settings first.") }
@@ -79,24 +90,66 @@ class ChatListViewModel(
         viewModelScope.launch {
             _state.update { it.copy(isCreating = true, error = null) }
             try {
-                // Try to fetch models, but don't block on failure
-                val models = try { gatewayRepo.fetchAndCacheModels(gw) } catch (_: Exception) { gatewayRepo.getCachedModels(gw.id) }
-                val preferred = com.cortex.app.CortexApp.instance.settingsStore.getDefaultModel(gw.id)
-                    ?: models.firstOrNull()?.id
-                    ?: "gpt-4o-mini"
+                // Fetch models from API (or fall back to cache)
+                val models = try {
+                    gatewayRepo.fetchAndCacheModels(gw)
+                } catch (e: Exception) {
+                    Log.w("Cortex", "Model fetch failed, using cache: ${e.message}")
+                    gatewayRepo.getCachedModels(gw.id)
+                }
+                Log.d("Cortex", "New chat: fetched ${models.size} models")
+                _state.update { it.copy(isCreating = false, availableModels = models, showModelPicker = models.isNotEmpty()) }
+
+                if (models.isEmpty()) {
+                    // No models available — create with fallback model name
+                    createChatWithModel(gw, "gpt-4o-mini")
+                }
+                // If models exist, the UI will show the picker dialog.
+                // User selects a model → createChatWithModel is called.
+            } catch (e: Exception) {
+                _state.update { it.copy(isCreating = false, error = "Failed to load models: ${e.message}") }
+            }
+        }
+    }
+
+    /**
+     * Create a new chat with the selected model.
+     */
+    fun createChatWithModel(gateway: GatewayEntity, modelId: String) {
+        viewModelScope.launch {
+            _state.update { it.copy(isCreating = true, error = null, showModelPicker = false) }
+            try {
+                // Save as default model for this gateway
+                com.cortex.app.CortexApp.instance.settingsStore.setDefaultModel(gateway.id, modelId)
+
                 val wsConfig = com.cortex.app.CortexApp.instance.settingsStore.webSearchConfig
                 val id = chatRepo.createChat(
                     title = "New Chat",
-                    gatewayId = gw.id,
-                    model = preferred,
+                    gatewayId = gateway.id,
+                    model = modelId,
                     webSearchEnabled = wsConfig.provider != com.cortex.app.data.model.SearchProvider.DISABLED
                 )
-                _state.update { it.copy(isCreating = false) }
-                onCreated(id)
+                Log.d("Cortex", "Created chat id=$id with model=$modelId")
+                _state.update { it.copy(isCreating = false, showModelPicker = false, availableModels = emptyList()) }
+                pendingNewChatCallback?.invoke(id)
+                pendingNewChatCallback = null
             } catch (e: Exception) {
                 _state.update { it.copy(isCreating = false, error = "Failed to create chat: ${e.message}") }
             }
         }
+    }
+
+    // Callback holder — the screen sets this before calling startNewChat
+    private var pendingNewChatCallback: ((Long) -> Unit)? = null
+
+    fun createNewChat(onCreated: (Long) -> Unit) {
+        pendingNewChatCallback = onCreated
+        startNewChat()
+    }
+
+    fun dismissModelPicker() {
+        _state.update { it.copy(showModelPicker = false, availableModels = emptyList()) }
+        pendingNewChatCallback = null
     }
 
     fun clearError() { _state.update { it.copy(error = null) } }

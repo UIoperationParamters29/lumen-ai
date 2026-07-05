@@ -206,6 +206,18 @@ fun ChatListScreen(
                 onDismiss = { renameDialog = null }
             )
         }
+
+        // Model picker dialog for new chat
+        if (state.showModelPicker) {
+            NewChatModelPickerDialog(
+                models = state.availableModels,
+                gatewayName = state.defaultGateway?.name ?: "Gateway",
+                onSelect = { modelId ->
+                    state.defaultGateway?.let { gw -> vm.createChatWithModel(gw, modelId) }
+                },
+                onDismiss = vm::dismissModelPicker
+            )
+        }
     }
 }
 
@@ -362,6 +374,64 @@ private fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss
         },
         confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        containerColor = BgElevated
+    )
+}
+
+@Composable
+private fun NewChatModelPickerDialog(
+    models: List<com.cortex.app.data.model.ModelInfo>,
+    gatewayName: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.cortex.app.ui.components.CortexOrb(size = 24.dp, pulse = false)
+                Spacer(Modifier.width(8.dp))
+                Column {
+                    Text("New Chat", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(gatewayName, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                }
+            }
+        },
+        text = {
+            Column {
+                Text("Pick a model to start chatting", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                Spacer(Modifier.height(12.dp))
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                ) {
+                    items(models) { m ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(m.id) }
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(m.displayName ?: m.id, style = MaterialTheme.typography.bodyLarge, color = TextPrimary)
+                                if (m.ownedBy != null) {
+                                    Text(m.ownedBy, style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                                }
+                                if (m.supportsVision) {
+                                    Text("vision", style = MaterialTheme.typography.labelSmall, color = AccentGreen, modifier = Modifier.padding(top = 2.dp))
+                                }
+                            }
+                            Icon(Icons.Rounded.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) }
+        },
         containerColor = BgElevated
     )
 }
