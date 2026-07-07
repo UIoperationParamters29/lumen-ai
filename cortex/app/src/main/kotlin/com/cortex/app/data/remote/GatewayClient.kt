@@ -97,6 +97,51 @@ class GatewayClient {
         }
 
     /**
+     * Non-streaming chat completion. Returns full content + reasoning.
+     * Used as a fallback when streaming fails with 405 or other errors.
+     */
+    suspend fun chatCompletion(
+        baseUrl: String,
+        apiKey: String,
+        request: ChatRequest
+    ): Pair<String, String?> = withContext(Dispatchers.IO) {
+        val nonStreamReq = request.copy(stream = false)
+        val payload = json.encodeToString(ChatRequest.serializer(), nonStreamReq)
+        val url = normalizeBaseUrl(baseUrl) + "/chat/completions"
+        android.util.Log.d("Cortex", "POST (non-stream) $url (model=${request.model})")
+
+        val req = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $apiKey")
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .post(payload.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body?.string() ?: throw IOException("Empty body")
+            if (!resp.isSuccessful) {
+                android.util.Log.e("Cortex", "Chat HTTP ${resp.code}: ${body.take(500)}")
+                val hint = when (resp.code) {
+                    405 -> " (405 — this gateway may not support /chat/completions. Check Base URL or model name)"
+                    401 -> " (401 — check API key)"
+                    403 -> " (403 — key may not have access to this model)"
+                    404 -> " (404 — check Base URL path)"
+                    429 -> " (429 — rate limited)"
+                    else -> ""
+                }
+                throw IOException("HTTP ${resp.code}$hint: ${body.take(300)}")
+            }
+            val obj = json.parseToJsonElement(body).jsonObject
+            val choice = obj["choices"]?.jsonArray?.firstOrNull()?.jsonObject
+            val msg = choice?.get("message")?.jsonObject
+            val content = msg?.get("content")?.jsonPrimitive?.contentOrNull ?: ""
+            val reasoning = msg?.get("reasoning_content")?.jsonPrimitive?.contentOrNull
+            content to reasoning
+        }
+    }
+
+    /**
      * Streaming chat completion. Emits StreamEvent items.
      * Uses raw line-by-line parsing (more reliable than okhttp-sse for various gateway quirks).
      */

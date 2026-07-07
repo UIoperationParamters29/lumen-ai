@@ -55,9 +55,14 @@ fun ChatScreen(
             Column {
                 TopAppBar(
                     title = {
-                        Column {
+                        Column(
+                            modifier = Modifier.clickable { vm.setShowModelPicker(true) }
+                        ) {
                             Text(state.chat?.title ?: "Chat", style = MaterialTheme.typography.titleMedium, color = TextPrimary, maxLines = 1, fontWeight = FontWeight.Medium)
-                            Text(state.chat?.model ?: "", style = MaterialTheme.typography.labelSmall, color = AccentCyan, maxLines = 1)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(state.chat?.model ?: "", style = MaterialTheme.typography.labelSmall, color = AccentCyan, maxLines = 1)
+                                Icon(Icons.Rounded.KeyboardArrowDown, null, tint = AccentCyan, modifier = Modifier.size(14.dp))
+                            }
                         }
                     },
                     navigationIcon = {
@@ -110,7 +115,6 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .imePadding()  // CRITICAL: pushes content above keyboard
                 .background(
                     Brush.verticalGradient(
                         listOf(AccentBlue.copy(alpha = 0.02f), BgPrimary, BgPrimary)
@@ -190,7 +194,13 @@ private fun ChatInputBar(
     onStop: () -> Unit,
     isStreaming: Boolean
 ) {
-    Surface(modifier = Modifier.fillMaxWidth(), color = Color.Transparent) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .imePadding()
+            .navigationBarsPadding(),
+        color = Color.Transparent
+    ) {
         GlassCard(
             modifier = Modifier
                 .fillMaxWidth()
@@ -342,22 +352,33 @@ private fun ModelPickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select Model", color = TextPrimary) },
+        title = { Text("Switch Model", color = TextPrimary, fontWeight = FontWeight.SemiBold) },
         text = {
-            LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
-                items(models) { m ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onSelect(m.id) }.padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(m.displayName ?: m.id, style = MaterialTheme.typography.bodyLarge, color = TextPrimary)
-                            if (m.ownedBy != null) {
-                                Text(m.ownedBy, style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+            if (models.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = AccentCyan)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Loading models…", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
+                    items(models) { m ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable { onSelect(m.id) }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(m.displayName ?: m.id, style = MaterialTheme.typography.bodyLarge, color = TextPrimary)
+                                if (m.ownedBy != null) {
+                                    Text(m.ownedBy, style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                                }
                             }
-                        }
-                        if (m.id == current) {
-                            Icon(Icons.Rounded.Check, null, tint = AccentCyan, modifier = Modifier.size(18.dp))
+                            if (m.id == current) {
+                                Icon(Icons.Rounded.Check, null, tint = AccentCyan, modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
                 }

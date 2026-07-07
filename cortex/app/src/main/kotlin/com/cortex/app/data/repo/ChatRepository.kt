@@ -180,6 +180,7 @@ class ChatRepository(
             val reasoningBuilder = StringBuilder()
             var streamError: String? = null
             var lastFlushLen = 0
+            var gotError405 = false
 
             gatewayClient.streamChatCompletion(gateway.baseUrl, gateway.apiKey, request).collect { event ->
                 if (cancelFlag.get()) { streamError = "Stopped by user"; return@collect }
@@ -209,7 +210,31 @@ class ChatRepository(
                     }
                     is StreamEvent.Done -> { /* stream finished */ }
                     is StreamEvent.ToolCall -> { /* tool calls not executed in V1 */ }
-                    is StreamEvent.Error -> { streamError = event.message }
+                    is StreamEvent.Error -> {
+                        streamError = event.message
+                        // If 405, mark for fallback to non-streaming
+                        if (event.code == 405 || event.message.contains("405")) {
+                            gotError405 = true
+                        }
+                    }
+                }
+            }
+
+            // FALLBACK: If streaming returned 405, try non-streaming
+            if (gotError405 && contentBuilder.isEmpty() && !cancelFlag.get()) {
+                android.util.Log.d("Cortex", "Streaming gave 405, falling back to non-streaming")
+                streamError = null
+                try {
+                    val (content, reasoning) = gatewayClient.chatCompletion(gateway.baseUrl, gateway.apiKey, request)
+                    contentBuilder.append(content)
+                    onToken(content)
+                    if (reasoning != null) {
+                        reasoningBuilder.append(reasoning)
+                        onReasoning(reasoning)
+                    }
+                    _streamState.value = _streamState.value.copy(content = content, reasoning = reasoning ?: "")
+                } catch (e: Exception) {
+                    streamError = e.message ?: "Non-streaming fallback failed"
                 }
             }
 
