@@ -7,25 +7,25 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.cortex.app.ui.theme.*
 
 /**
- * Animated Cortex orb — pulsing + spinning with a visible rotating ring.
- * The signature visual identity of the app.
+ * Animated Cortex orb — single clean orb with a visible orbiting dot.
+ * The dot physically orbits around the orb so rotation is OBVIOUS.
  */
 @Composable
 fun CortexOrb(
@@ -35,64 +35,41 @@ fun CortexOrb(
     spin: Boolean = true
 ) {
     val transition = rememberInfiniteTransition(label = "orb")
-    val scale by transition.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.1f,
+
+    val scaleAnim by transition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.08f,
         animationSpec = infiniteRepeatable(
             animation = tween(1000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "orbScale"
+        label = "pulse"
     )
+
     val rotation by transition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = LinearEasing),
+            animation = tween(2500, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "orbRotate"
-    )
-    val ringRotation by transition.animateFloat(
-        initialValue = 360f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ringRotate"
+        label = "rotation"
     )
 
-    val actualScale = if (pulse) scale else 1f
+    val finalScale = if (pulse) scaleAnim else 1f
+    val finalRotation = if (spin) rotation else 0f
 
-    Box(modifier = modifier.size(size * 1.3f * actualScale)) {
-        // Outer rotating ring — VISIBLE gradient border that spins
+    // Container — large enough for the orbiting dot
+    val containerSize = size * 1.25f
+
+    Box(modifier = modifier.size(containerSize * finalScale)) {
+
+        // Main orb — solid gradient sphere (static, doesn't rotate)
         Box(
             modifier = Modifier
-                .size(size * 1.3f)
-                .graphicsLayer { rotationZ = if (spin) ringRotation else 0f }
-                .clip(RoundedCornerShape(50))
-                .background(
-                    Brush.sweepGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            AccentCyan.copy(alpha = 0.6f),
-                            Color.Transparent,
-                            AccentBlue.copy(alpha = 0.6f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-
-        // Inner orb — solid gradient sphere that pulses
-        Box(
-            modifier = Modifier
-                .size(size)
-                .graphicsLayer {
-                    this.rotationZ = if (spin) rotation else 0f
-                }
-                .clip(RoundedCornerShape(50))
+                .size(size * finalScale)
+                .align(Alignment.Center)
+                .clip(CircleShape)
                 .background(
                     Brush.sweepGradient(
                         colors = listOf(
@@ -106,17 +83,21 @@ fun CortexOrb(
                 )
         )
 
-        // Highlight dot — orbits around to make rotation VISIBLE
+        // Orbiting dot — rotating container holds dot at top, creating orbit
         Box(
             modifier = Modifier
-                .size(size * 0.15f)
-                .graphicsLayer {
-                    this.rotationZ = if (spin) rotation else 0f
-                    this.translationY = -size.toPx() * 0.4f
-                }
-                .clip(RoundedCornerShape(50))
-                .background(Color.White.copy(alpha = 0.9f))
-        )
+                .size(containerSize * finalScale)
+                .align(Alignment.Center)
+                .rotate(finalRotation)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(size * 0.2f * finalScale)
+                    .align(Alignment.TopCenter)
+                    .clip(CircleShape)
+                    .background(Color.White)
+            )
+        }
     }
 }
 
@@ -132,7 +113,7 @@ fun StaticOrb(
     Box(
         modifier = modifier
             .size(size)
-            .clip(RoundedCornerShape(50))
+            .clip(CircleShape)
             .background(gradient)
     )
 }
