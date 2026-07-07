@@ -237,13 +237,22 @@ fun MarkdownText(
     text: String,
     modifier: Modifier = Modifier,
     color: Color = TextPrimary,
-    fontSize: Int = 15
+    fontSize: Int = 15,
+    isStreaming: Boolean = false
 ) {
     val context = LocalContext.current
-    val blocks = remember(text) { parseMarkdown(text) }
+    // During streaming, limit parse frequency by using a substring if extremely long
+    val displayText = if (isStreaming && text.length > 50000) text.take(50000) + "\n\n…(streaming)" else text
+    val blocks = remember(displayText) {
+        runCatching { parseMarkdown(displayText) }.getOrDefault(emptyList())
+    }
     val baseStyle = MaterialTheme.typography.bodyLarge.copy(color = color, fontSize = fontSize.sp)
 
     Column(modifier = modifier.fillMaxWidth()) {
+        if (blocks.isEmpty() && displayText.isNotBlank()) {
+            // Fallback: just show raw text if parsing failed
+            Text(text = displayText, style = baseStyle, modifier = Modifier.padding(vertical = 2.dp))
+        }
         blocks.forEach { block ->
             when (block) {
                 is MDBlock.Header -> {

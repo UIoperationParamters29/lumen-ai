@@ -258,6 +258,54 @@ private fun ChatInputBar(
 }
 
 @Composable
+private fun StreamingDots() {
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "dots")
+    val dot1 by transition.animateFloat(
+        initialValue = 0.3f, targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(500, delayMillis = 0),
+            androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "dot1"
+    )
+    val dot2 by transition.animateFloat(
+        initialValue = 0.3f, targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(500, delayMillis = 150),
+            androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "dot2"
+    )
+    val dot3 by transition.animateFloat(
+        initialValue = 0.3f, targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(500, delayMillis = 300),
+            androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "dot3"
+    )
+    val alphas = listOf(dot1, dot2, dot3)
+    Row(
+        modifier = Modifier.padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(3) { i ->
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        Brush.radialGradient(
+                            listOf(AccentCyan.copy(alpha = alphas[i]), AccentBlue.copy(alpha = alphas[i] * 0.5f))
+                        )
+                    )
+            )
+        }
+    }
+}
+
+@Composable
 private fun StreamingBubble(
     content: String,
     reasoning: String,
@@ -266,9 +314,13 @@ private fun StreamingBubble(
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp)) {
         Row(verticalAlignment = Alignment.Top) {
-            CortexOrb(size = 28.dp, pulse = true)
+            CortexOrb(size = 28.dp, pulse = true, spin = true)
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
+                // If no content yet and no reasoning, show "thinking" indicator
+                if (content.isBlank() && reasoning.isBlank() && searchResults.isEmpty()) {
+                    StreamingDots()
+                }
                 if (reasoning.isNotBlank() && showThinking) {
                     StreamingThinking(reasoning = reasoning)
                     Spacer(Modifier.height(6.dp))
@@ -278,7 +330,7 @@ private fun StreamingBubble(
                     Spacer(Modifier.height(6.dp))
                 }
                 if (content.isNotBlank()) {
-                    SelectionContainer { MarkdownText(text = content, color = TextPrimary, fontSize = 15) }
+                    SelectionContainer { MarkdownText(text = content, color = TextPrimary, fontSize = 15, isStreaming = true) }
                 }
             }
         }

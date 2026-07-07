@@ -14,22 +14,25 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.cortex.app.ui.theme.*
 
 /**
- * Animated Cortex orb — pulsing blue/cyan/green gradient sphere.
+ * Animated Cortex orb — pulsing + rotating gradient sphere.
  * The signature visual identity of the app.
  */
 @Composable
 fun CortexOrb(
     modifier: Modifier = Modifier,
     size: Dp = 32.dp,
-    pulse: Boolean = true
+    pulse: Boolean = true,
+    spin: Boolean = true
 ) {
     val transition = rememberInfiniteTransition(label = "orb")
     val scale by transition.animateFloat(
@@ -45,21 +48,31 @@ fun CortexOrb(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(8000, easing = LinearEasing),
+            animation = tween(6000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "orbRotate"
     )
 
     val actualScale = if (pulse) scale else 1f
+    val actualRotation = if (spin) rotation else 0f
 
     Box(
         modifier = modifier
             .size(size * actualScale)
+            .graphicsLayer {
+                this.rotationZ = actualRotation
+            }
             .clip(RoundedCornerShape(50))
             .background(
                 Brush.sweepGradient(
-                    colors = listOf(AccentBlue, AccentCyan, AccentGreen, AccentBlue)
+                    colors = listOf(
+                        AccentBlue,
+                        AccentCyan,
+                        AccentGreen,
+                        AccentIndigo,
+                        AccentBlue
+                    )
                 )
             )
     )

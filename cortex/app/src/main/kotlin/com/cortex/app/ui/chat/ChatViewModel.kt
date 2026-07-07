@@ -1,5 +1,6 @@
 package com.cortex.app.ui.chat
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -46,8 +47,13 @@ class ChatViewModel(
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
     private var sendJob: Job? = null
-    // Per-message "show thinking" toggle (keyed by message id)
     val thinkingExpanded = mutableStateMapOf<Long, Boolean>()
+
+    // Throttling for streaming UI updates — prevents crash on long responses
+    private val streamingBuffer = StringBuilder()
+    private val reasoningBuffer = StringBuilder()
+    private var lastFlushTime = 0L
+    private val FLUSH_INTERVAL_MS = 80L  // Update UI at most every 80ms
 
     init {
         loadChat()
@@ -91,7 +97,6 @@ class ChatViewModel(
     }
 
     fun setShowModelPicker(show: Boolean) {
-        // Refresh models when opening
         if (show) {
             val chat = _state.value.chat ?: return
             viewModelScope.launch {
@@ -147,25 +152,65 @@ class ChatViewModel(
                 error = null
             )
         }
+        streamingBuffer.setLength(0)
+        reasoningBuffer.setLength(0)
+        lastFlushTime = System.currentTimeMillis()
 
         sendJob = viewModelScope.launch {
-            val result = chatRepo.sendMessage(
-                chatId = chatId,
-                userText = text,
-                onToken = { piece ->
-                    _state.update { it.copy(streamingContent = it.streamingContent + piece) }
-                },
-                onReasoning = { piece ->
-                    _state.update { it.copy(streamingReasoning = it.streamingReasoning + piece) }
-                },
-                onSearchResults = { results ->
-                    _state.update { it.copy(streamingSearchResults = results) }
+            try {
+                val result = chatRepo.sendMessage(
+                    chatId = chatId,
+                    userText = text,
+                    onToken = { piece ->
+                        streamingBuffer.append(piece)
+                        flushStreamingIfNeeded()
+                    },
+                    onReasoning = { piece ->
+                        reasoningBuffer.append(piece)
+                        flushStreamingIfNeeded()
+                    },
+                    onSearchResults = { results ->
+                        _state.update { it.copy(streamingSearchResults = results) }
+                    }
+                )
+                // Final flush to ensure all content is shown
+                _state.update {
+                    it.copy(
+                        streamingContent = streamingBuffer.toString(),
+                        streamingReasoning = reasoningBuffer.toString()
+                    )
                 }
-            )
-            result.onFailure { e ->
-                _state.update { it.copy(error = e.message ?: "Failed to send message") }
+                result.onFailure { e ->
+                    Log.e("Cortex", "Send failed", e)
+                    _state.update { it.copy(error = e.message ?: "Failed to send message") }
+                }
+            } catch (e: Exception) {
+                Log.e("Cortex", "Send exception", e)
+                _state.update { it.copy(error = e.message ?: "Unknown error") }
+            } finally {
+                _state.update {
+                    it.copy(
+                        isStreaming = false,
+                        streamingContent = "",
+                        streamingReasoning = "",
+                        streamingSearchResults = emptyList()
+                    )
+                }
             }
-            _state.update { it.copy(isStreaming = false, streamingContent = "", streamingReasoning = "", streamingSearchResults = emptyList()) }
+        }
+    }
+
+    /** Throttle UI updates to prevent crash on long responses — max 1 update per 80ms */
+    private fun flushStreamingIfNeeded() {
+        val now = System.currentTimeMillis()
+        if (now - lastFlushTime >= FLUSH_INTERVAL_MS) {
+            lastFlushTime = now
+            _state.update {
+                it.copy(
+                    streamingContent = streamingBuffer.toString(),
+                    streamingReasoning = reasoningBuffer.toString()
+                )
+            }
         }
     }
 
@@ -177,15 +222,11 @@ class ChatViewModel(
 
     fun regenerate(message: MessageEntity) {
         if (_state.value.isStreaming) return
-        // Delete the last assistant message and re-send the previous user message
         viewModelScope.launch {
             chatRepo.deleteMessage(message)
-            // Find the last user message
             val history = chatRepo.getMessages(chatId)
             val lastUser = history.lastOrNull { it.role == "user" } ?: return@launch
-            // Re-inject its text as input and call send
             _state.update { it.copy(inputText = lastUser.content) }
-            // Delete the user message (we'll re-add via send)
             chatRepo.deleteMessage(lastUser)
             send()
         }
