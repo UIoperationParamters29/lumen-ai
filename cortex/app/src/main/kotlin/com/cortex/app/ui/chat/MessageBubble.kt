@@ -243,25 +243,39 @@ private fun SearchResultsPanel(results: List<SearchResult>) {
 @Composable
 private fun StreamingDots() {
     val transition = rememberInfiniteTransition(label = "dots")
-    val alpha by transition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dotAlpha"
+    // Three dots with staggered wave animation
+    val dot1 by transition.animateFloat(
+        initialValue = 0.3f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(500, delayMillis = 0), RepeatMode.Reverse),
+        label = "dot1"
     )
-    Row(modifier = Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    val dot2 by transition.animateFloat(
+        initialValue = 0.3f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(500, delayMillis = 150), RepeatMode.Reverse),
+        label = "dot2"
+    )
+    val dot3 by transition.animateFloat(
+        initialValue = 0.3f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(500, delayMillis = 300), RepeatMode.Reverse),
+        label = "dot3"
+    )
+    val alphas = listOf(dot1, dot2, dot3)
+    Row(
+        modifier = Modifier.padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         repeat(3) { i ->
             Box(
                 modifier = Modifier
-                    .size(6.dp)
-                    .padding(end = 4.dp)
+                    .size(7.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(AccentCyan.copy(alpha = alpha))
+                    .background(
+                        Brush.radialGradient(
+                            listOf(AccentCyan.copy(alpha = alphas[i]), AccentBlue.copy(alpha = alphas[i] * 0.5f))
+                        )
+                    )
             )
-            if (i < 2) Spacer(Modifier.width(4.dp))
         }
     }
 }

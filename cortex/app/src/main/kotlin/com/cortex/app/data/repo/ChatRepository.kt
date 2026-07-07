@@ -23,6 +23,7 @@ import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 
 data class StreamState(
     val isActive: Boolean = false,
@@ -149,39 +150,31 @@ class ChatRepository(
 
             insertUserMessage(chatId, userText)
 
-            var searchResultsJson: String? = null
-            if (chat.webSearchEnabled) {
-                val config = settingsStore.webSearchConfig
-                android.util.Log.d("Cortex", "Web search enabled, provider=${config.provider}")
-                if (config.provider != com.cortex.app.data.model.SearchProvider.DISABLED) {
-                    try {
-                        val results = webSearchProvider.search(userText, config)
-                        android.util.Log.d("Cortex", "Web search returned ${results.size} results")
-                        if (results.isNotEmpty()) {
-                            onSearchResults(results)
-                            _streamState.value = _streamState.value.copy(searchResults = results)
-                            searchResultsJson = serializeSearchResults(results)
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.w("Cortex", "Web search failed (non-fatal): ${e.message}")
-                    }
-                }
-            }
-
             val history = getMessages(chatId)
-            val messages = buildMessagesForApi(history, chat, searchResultsJson)
+            val messages = buildMessagesForApi(history, chat, null)
             val assistantMsgId = createAssistantPlaceholder(chatId, chat.model)
+
+            // Build web search tool if enabled
+            val webSearchTool = if (chat.webSearchEnabled) {
+                val config = settingsStore.webSearchConfig
+                if (config.provider != com.cortex.app.data.model.SearchProvider.DISABLED) {
+                    buildWebSearchTool()
+                } else null
+            } else null
+
             val request = ChatRequest(
                 model = chat.model, messages = messages, temperature = chat.temperature,
-                max_tokens = chat.maxTokens, top_p = chat.topP, stream = true
+                max_tokens = chat.maxTokens, top_p = chat.topP, stream = true,
+                tools = webSearchTool?.let { listOf(it) }
             )
 
             val contentBuilder = StringBuilder()
             val reasoningBuilder = StringBuilder()
             var streamError: String? = null
-            var lastFlushLen = 0
             var gotError405 = false
+            val collectedToolCalls = mutableListOf<StreamEvent.ToolCall>()
 
+            // === FIRST STREAM: may produce content, reasoning, or tool calls ===
             gatewayClient.streamChatCompletion(gateway.baseUrl, gateway.apiKey, request).collect { event ->
                 if (cancelFlag.get()) { streamError = "Stopped by user"; return@collect }
                 when (event) {
@@ -189,52 +182,109 @@ class ChatRepository(
                         contentBuilder.append(event.text)
                         onToken(event.text)
                         _streamState.value = _streamState.value.copy(content = contentBuilder.toString())
-                        if (contentBuilder.length - lastFlushLen > 40) {
-                            updateMessage(
-                                MessageEntity(
-                                    id = assistantMsgId, chatId = chatId, role = "assistant",
-                                    content = contentBuilder.toString(),
-                                    reasoningContent = reasoningBuilder.toString().ifEmpty { null },
-                                    model = chat.model, isStreaming = true,
-                                    createdAt = (history.find { it.id == assistantMsgId }?.createdAt ?: System.currentTimeMillis()),
-                                    searchResults = searchResultsJson
-                                )
-                            )
-                            lastFlushLen = contentBuilder.length
-                        }
                     }
                     is StreamEvent.DeltaReasoning -> {
                         reasoningBuilder.append(event.text)
                         onReasoning(event.text)
                         _streamState.value = _streamState.value.copy(reasoning = reasoningBuilder.toString())
                     }
-                    is StreamEvent.Done -> { /* stream finished */ }
-                    is StreamEvent.ToolCall -> { /* tool calls not executed in V1 */ }
+                    is StreamEvent.ToolCall -> {
+                        collectedToolCalls.add(event)
+                        android.util.Log.d("Cortex", "Tool call: ${event.name}(${event.arguments})")
+                    }
+                    is StreamEvent.Done -> { }
                     is StreamEvent.Error -> {
                         streamError = event.message
-                        // If 405, mark for fallback to non-streaming
-                        if (event.code == 405 || event.message.contains("405")) {
-                            gotError405 = true
-                        }
+                        if (event.code == 405 || event.message.contains("405")) gotError405 = true
                     }
                 }
             }
 
-            // FALLBACK: If streaming returned 405, try non-streaming
-            if (gotError405 && contentBuilder.isEmpty() && !cancelFlag.get()) {
+            // 405 fallback (non-streaming)
+            if (gotError405 && contentBuilder.isEmpty() && collectedToolCalls.isEmpty() && !cancelFlag.get()) {
                 android.util.Log.d("Cortex", "Streaming gave 405, falling back to non-streaming")
                 streamError = null
                 try {
                     val (content, reasoning) = gatewayClient.chatCompletion(gateway.baseUrl, gateway.apiKey, request)
                     contentBuilder.append(content)
                     onToken(content)
-                    if (reasoning != null) {
-                        reasoningBuilder.append(reasoning)
-                        onReasoning(reasoning)
+                    if (reasoning != null) { reasoningBuilder.append(reasoning); onReasoning(reasoning) }
+                } catch (e: Exception) { streamError = e.message ?: "Fallback failed" }
+            }
+
+            // === TOOL CALL HANDLING: if AI requested web search, execute it ===
+            var searchResultsJson: String? = null
+            if (collectedToolCalls.isNotEmpty() && !cancelFlag.get()) {
+                android.util.Log.d("Cortex", "AI requested ${collectedToolCalls.size} tool calls")
+                val config = settingsStore.webSearchConfig
+                val toolResultsMessages = mutableListOf<ChatMessage>()
+
+                for (tc in collectedToolCalls) {
+                    if (tc.name == "web_search") {
+                        val query = parseSearchQuery(tc.arguments)
+                        android.util.Log.d("Cortex", "Executing web_search: $query")
+                        try {
+                            val results = webSearchProvider.search(query, config)
+                            android.util.Log.d("Cortex", "Search returned ${results.size} results")
+                            if (results.isNotEmpty()) {
+                                onSearchResults(results)
+                                _streamState.value = _streamState.value.copy(searchResults = results)
+                                searchResultsJson = serializeSearchResults(results)
+                            }
+                            val resultsText = webSearchProvider.formatResultsForPrompt(query, results)
+                            toolResultsMessages.add(ChatMessage(role = "tool", content = resultsText))
+                        } catch (e: Exception) {
+                            toolResultsMessages.add(ChatMessage(role = "tool", content = "Search failed: ${e.message}"))
+                        }
                     }
-                    _streamState.value = _streamState.value.copy(content = content, reasoning = reasoning ?: "")
-                } catch (e: Exception) {
-                    streamError = e.message ?: "Non-streaming fallback failed"
+                }
+
+                // Send follow-up request with tool results to get final answer
+                if (toolResultsMessages.isNotEmpty()) {
+                    // Reset streaming content for the second response
+                    contentBuilder.clear()
+                    reasoningBuilder.clear()
+                    _streamState.value = _streamState.value.copy(content = "", reasoning = "")
+
+                    // Build follow-up messages: original + assistant tool_call + tool results
+                    val followUpMessages = messages.toMutableList()
+                    // Add the assistant's tool-call message
+                    followUpMessages.add(ChatMessage(
+                        role = "assistant",
+                        content = null,
+                        tool_calls = collectedToolCalls.map { tc ->
+                            com.cortex.app.data.model.ToolCall(
+                                id = tc.toolCallId,
+                                type = "function",
+                                function = com.cortex.app.data.model.ToolCallFunction(name = tc.name, arguments = tc.arguments)
+                            )
+                        }
+                    ))
+                    // Add tool results
+                    followUpMessages.addAll(toolResultsMessages)
+
+                    val followUpRequest = ChatRequest(
+                        model = chat.model, messages = followUpMessages,
+                        temperature = chat.temperature, max_tokens = chat.maxTokens,
+                        top_p = chat.topP, stream = true
+                    )
+
+                    gatewayClient.streamChatCompletion(gateway.baseUrl, gateway.apiKey, followUpRequest).collect { event ->
+                        if (cancelFlag.get()) { streamError = "Stopped by user"; return@collect }
+                        when (event) {
+                            is StreamEvent.DeltaContent -> {
+                                contentBuilder.append(event.text)
+                                onToken(event.text)
+                                _streamState.value = _streamState.value.copy(content = contentBuilder.toString())
+                            }
+                            is StreamEvent.DeltaReasoning -> {
+                                reasoningBuilder.append(event.text)
+                                onReasoning(event.text)
+                                _streamState.value = _streamState.value.copy(reasoning = reasoningBuilder.toString())
+                            }
+                            else -> { }
+                        }
+                    }
                 }
             }
 
@@ -316,5 +366,35 @@ class ChatRepository(
     private fun deriveTitle(userText: String): String {
         val clean = userText.trim().replace("\n", " ")
         return if (clean.length <= 40) clean else clean.take(37) + "…"
+    }
+
+    /** Build the web_search tool definition for OpenAI-compatible function calling. */
+    private fun buildWebSearchTool(): com.cortex.app.data.model.Tool {
+        val params = buildJsonObject {
+            put("type", "object")
+            put("properties", buildJsonObject {
+                put("query", buildJsonObject {
+                    put("type", "string")
+                    put("description", "The search query to look up on the web")
+                })
+            })
+            putJsonArray("required") { add("query") }
+        }
+        return com.cortex.app.data.model.Tool(
+            type = "function",
+            function = com.cortex.app.data.model.ToolFunction(
+                name = "web_search",
+                description = "Search the web for current information. Use this when the user asks about recent events, current data, news, or anything that requires up-to-date information. Do not use it for general knowledge questions.",
+                parameters = params
+            )
+        )
+    }
+
+    /** Parse the search query from tool call arguments JSON. */
+    private fun parseSearchQuery(arguments: String): String {
+        return runCatching {
+            val obj = json.parseToJsonElement(arguments) as JsonObject
+            (obj["query"] as? JsonPrimitive)?.content ?: arguments
+        }.getOrDefault(arguments)
     }
 }

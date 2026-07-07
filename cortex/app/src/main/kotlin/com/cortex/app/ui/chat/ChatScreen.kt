@@ -136,15 +136,17 @@ fun ChatScreen(
             if (state.messages.isEmpty() && !state.isStreaming) {
                 EmptyChatView(model = state.chat?.model ?: "")
             } else {
+                // Filter out streaming placeholder messages — StreamingBubble handles those
+                val displayMessages = state.messages.filter { !it.isStreaming }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
-                    items(state.messages, key = { it.id }) { msg ->
+                    items(displayMessages, key = { it.id }) { msg ->
                         MessageBubble(
                             message = msg,
-                            isLast = msg.id == state.messages.lastOrNull { it.role == "assistant" && !it.isStreaming }?.id,
+                            isLast = msg.id == displayMessages.lastOrNull { it.role == "assistant" }?.id,
                             showThinking = state.showThinking,
                             isThinkingExpanded = vm.thinkingExpanded[msg.id] ?: true,
                             onToggleThinking = { vm.toggleThinkingForMessage(msg.id) },
