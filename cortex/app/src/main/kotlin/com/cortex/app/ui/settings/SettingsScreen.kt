@@ -185,15 +185,17 @@ private fun GatewayRow(
                 Text(gateway.baseUrl, style = MaterialTheme.typography.bodySmall, color = TextSecondary, maxLines = 1)
                 Text("••••••••${gateway.apiKey.takeLast(4)}", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
             }
-            IconButton(onClick = { showMenu = true }, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Rounded.MoreVert, null, tint = TextTertiary, modifier = Modifier.size(18.dp))
-            }
-            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                if (!gateway.isDefault) {
-                    DropdownMenuItem(text = { Text("Set as default") }, onClick = { showMenu = false; onSetDefault() }, leadingIcon = { Icon(Icons.Rounded.Star, null) })
+            Box {
+                IconButton(onClick = { showMenu = true }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Rounded.MoreVert, null, tint = TextTertiary, modifier = Modifier.size(18.dp))
                 }
-                DropdownMenuItem(text = { Text("Edit") }, onClick = { showMenu = false; onEdit() }, leadingIcon = { Icon(Icons.Rounded.Edit, null) })
-                DropdownMenuItem(text = { Text("Delete", color = StatusError) }, onClick = { showMenu = false; onDelete() }, leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = StatusError) })
+                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    if (!gateway.isDefault) {
+                        DropdownMenuItem(text = { Text("Set as default") }, onClick = { showMenu = false; onSetDefault() }, leadingIcon = { Icon(Icons.Rounded.Star, null) })
+                    }
+                    DropdownMenuItem(text = { Text("Edit") }, onClick = { showMenu = false; onEdit() }, leadingIcon = { Icon(Icons.Rounded.Edit, null) })
+                    DropdownMenuItem(text = { Text("Delete", color = StatusError) }, onClick = { showMenu = false; onDelete() }, leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = StatusError) })
+                }
             }
         }
     }
@@ -398,6 +400,7 @@ private fun GatewayEditorDialog(
                     colors = outTextFieldColors(), shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
+                Text("Most gateways need /v1 at the end", style = MaterialTheme.typography.labelSmall, color = TextTertiary, modifier = Modifier.padding(top = 2.dp))
                 Spacer(Modifier.height(10.dp))
                 Text("API Key", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                 OutlinedTextField(

@@ -110,6 +110,7 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()  // CRITICAL: pushes content above keyboard
                 .background(
                     Brush.verticalGradient(
                         listOf(AccentBlue.copy(alpha = 0.02f), BgPrimary, BgPrimary)
@@ -193,8 +194,7 @@ private fun ChatInputBar(
         GlassCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .navigationBarsPadding(),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             cornerRadius = 24.dp
         ) {
             Row(

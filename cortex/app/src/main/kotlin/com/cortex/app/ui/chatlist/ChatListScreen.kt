@@ -207,13 +207,22 @@ fun ChatListScreen(
             )
         }
 
+        // Gateway picker dialog (when multiple gateways)
+        if (state.showGatewayPicker) {
+            NewChatGatewayPickerDialog(
+                gateways = state.allGateways,
+                onSelect = { gw -> vm.selectGateway(gw) },
+                onDismiss = vm::dismissGatewayPicker
+            )
+        }
+
         // Model picker dialog for new chat
         if (state.showModelPicker) {
             NewChatModelPickerDialog(
                 models = state.availableModels,
-                gatewayName = state.defaultGateway?.name ?: "Gateway",
+                gatewayName = state.selectedGateway?.name ?: "Gateway",
                 onSelect = { modelId ->
-                    state.defaultGateway?.let { gw -> vm.createChatWithModel(gw, modelId) }
+                    state.selectedGateway?.let { gw -> vm.createChatWithModel(gw, modelId) }
                 },
                 onDismiss = vm::dismissModelPicker
             )
@@ -374,6 +383,65 @@ private fun RenameDialog(initial: String, onConfirm: (String) -> Unit, onDismiss
         },
         confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        containerColor = BgElevated
+    )
+}
+
+@Composable
+private fun NewChatGatewayPickerDialog(
+    gateways: List<com.cortex.app.data.model.GatewayEntity>,
+    onSelect: (com.cortex.app.data.model.GatewayEntity) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.cortex.app.ui.components.CortexOrb(size = 24.dp, pulse = false)
+                Spacer(Modifier.width(8.dp))
+                Text("New Chat", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        text = {
+            Column {
+                Text("Select a gateway", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                Spacer(Modifier.height(12.dp))
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                ) {
+                    items(gateways) { gw ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(gw) }
+                                .padding(vertical = 10.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            com.cortex.app.ui.components.CortexOrb(size = 28.dp, pulse = false)
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(gw.name, style = MaterialTheme.typography.bodyLarge, color = TextPrimary, fontWeight = FontWeight.Medium)
+                                    if (gw.isDefault) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Surface(color = AccentGreen.copy(alpha = 0.15f), shape = RoundedCornerShape(4.dp)) {
+                                            Text("Default", style = MaterialTheme.typography.labelSmall, color = AccentGreen, modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp))
+                                        }
+                                    }
+                                }
+                                Text(gw.baseUrl, style = MaterialTheme.typography.labelSmall, color = TextTertiary, maxLines = 1)
+                            }
+                            Icon(Icons.Rounded.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) }
+        },
         containerColor = BgElevated
     )
 }

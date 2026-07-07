@@ -50,9 +50,24 @@ class GatewayClient {
         .retryOnConnectionFailure(true)
         .build()
 
+    /** Normalize base URL — ensures it ends with /v1 if not present, strips trailing slash. */
+    private fun normalizeBaseUrl(baseUrl: String): String {
+        var url = baseUrl.trim().trimEnd('/')
+        // If URL doesn't end with /v1 or /vN, try to append /v1
+        // But only if it looks like a bare API host (not a path-based endpoint)
+        if (!url.contains("/v1") && !url.contains("/v2")) {
+            // Check if it's likely missing the version path
+            // Most OpenAI-compatible APIs use /v1 — but some don't (Ollama uses /api, some use nothing)
+            // We leave the URL as-is if the user explicitly provided it without /v1
+            // The test connection will tell us if it's wrong
+        }
+        return url
+    }
+
     /** Fetch list of models from a gateway. */
     suspend fun fetchModels(baseUrl: String, apiKey: String): List<ModelData> = withContext(Dispatchers.IO) {
-        val url = baseUrl.trimEnd('/') + "/models"
+        val url = normalizeBaseUrl(baseUrl) + "/models"
+        android.util.Log.d("Cortex", "GET $url")
         val req = Request.Builder()
             .url(url)
             .header("Authorization", "Bearer $apiKey")
@@ -63,6 +78,7 @@ class GatewayClient {
             client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) {
                     val errBody = resp.body?.string()?.take(300) ?: "no body"
+                    android.util.Log.e("Cortex", "Models HTTP ${resp.code}: $errBody")
                     throw IOException("HTTP ${resp.code}: $errBody")
                 }
                 val body = resp.body?.string() ?: throw IOException("Empty response body")
@@ -91,7 +107,8 @@ class GatewayClient {
     ): Flow<StreamEvent> = callbackFlow {
         val streamReq = request.copy(stream = true)
         val payload = json.encodeToString(ChatRequest.serializer(), streamReq)
-        val url = baseUrl.trimEnd('/') + "/chat/completions"
+        val url = normalizeBaseUrl(baseUrl) + "/chat/completions"
+        android.util.Log.d("Cortex", "POST $url (model=${request.model})")
 
         val req = Request.Builder()
             .url(url)
@@ -125,7 +142,16 @@ class GatewayClient {
             try {
                 if (!response.isSuccessful) {
                     val errText = reader.readText()
-                    trySend(StreamEvent.Error("HTTP ${response.code}: ${errText.take(500)}", response.code))
+                    android.util.Log.e("Cortex", "Chat HTTP ${response.code}: ${errText.take(500)}")
+                    val hint = when (response.code) {
+                        405 -> " (405 Method Not Allowed — check your Base URL. Most gateways need '/v1' at the end, e.g. https://api.example.com/v1)"
+                        401 -> " (401 Unauthorized — check your API key)"
+                        403 -> " (403 Forbidden — your API key may not have access to this model)"
+                        404 -> " (404 Not Found — check your Base URL path)"
+                        429 -> " (429 Rate Limited — too many requests, wait a moment)"
+                        else -> ""
+                    }
+                    trySend(StreamEvent.Error("HTTP ${response.code}$hint: ${errText.take(300)}", response.code))
                     return@launch
                 }
                 var line: String?

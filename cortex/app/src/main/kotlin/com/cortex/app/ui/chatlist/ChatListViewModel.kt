@@ -18,9 +18,12 @@ import kotlinx.coroutines.launch
 
 data class ChatListState(
     val chats: List<ChatEntity> = emptyList(),
+    val allGateways: List<GatewayEntity> = emptyList(),
     val defaultGateway: GatewayEntity? = null,
     val availableModels: List<ModelInfo> = emptyList(),
+    val showGatewayPicker: Boolean = false,
     val showModelPicker: Boolean = false,
+    val selectedGateway: GatewayEntity? = null,
     val searchQuery: String = "",
     val isCreating: Boolean = false,
     val error: String? = null
@@ -35,8 +38,9 @@ class ChatListViewModel(
     private val _state = MutableStateFlow(ChatListState())
     val state: StateFlow<ChatListState> = _state.asStateFlow()
 
+    private var pendingNewChatCallback: ((Long) -> Unit)? = null
+
     init {
-        // Combine chats + search query → filtered list
         viewModelScope.launch {
             chatRepo.observeChats().combine(_search) { chats, query ->
                 if (query.isBlank()) chats
@@ -45,17 +49,15 @@ class ChatListViewModel(
                 _state.update { it.copy(chats = filtered) }
             }
         }
-        // Track search query in state
         viewModelScope.launch {
             _search.collect { q -> _state.update { it.copy(searchQuery = q) } }
         }
-        // CRITICAL: Observe gateways flow so defaultGateway updates live when user saves a gateway
+        // Observe gateways live
         viewModelScope.launch {
             gatewayRepo.observeGateways().collect { gateways ->
-                Log.d("Cortex", "ChatListVM: gateways updated, count=${gateways.size}")
+                Log.d("Cortex", "ChatListVM: gateways=${gateways.size}")
                 val default = gateways.find { it.isDefault } ?: gateways.firstOrNull()
-                _state.update { it.copy(defaultGateway = default) }
-                Log.d("Cortex", "ChatListVM: defaultGateway = ${default?.name}")
+                _state.update { it.copy(allGateways = gateways, defaultGateway = default) }
             }
         }
     }
@@ -77,51 +79,53 @@ class ChatListViewModel(
     }
 
     /**
-     * Start the new-chat flow. Fetches models for the default gateway,
-     * then either shows the model picker (if multiple models) or creates
-     * the chat immediately (if only one model).
+     * Start new chat flow:
+     * - If 0 gateways → error
+     * - If 1 gateway → skip to model picker
+     * - If 2+ gateways → show gateway picker first
      */
-    fun startNewChat() {
-        val gw = _state.value.defaultGateway
-        if (gw == null) {
+    fun createNewChat(onCreated: (Long) -> Unit) {
+        pendingNewChatCallback = onCreated
+        val gateways = _state.value.allGateways
+        if (gateways.isEmpty()) {
             _state.update { it.copy(error = "No gateway configured. Add one in Settings first.") }
             return
         }
+        if (gateways.size == 1) {
+            // Single gateway — skip picker
+            selectGateway(gateways.first())
+        } else {
+            // Multiple gateways — show picker
+            _state.update { it.copy(showGatewayPicker = true) }
+        }
+    }
+
+    fun selectGateway(gateway: GatewayEntity) {
+        _state.update { it.copy(selectedGateway = gateway, showGatewayPicker = false, isCreating = true, error = null) }
         viewModelScope.launch {
-            _state.update { it.copy(isCreating = true, error = null) }
             try {
-                // Fetch models from API (or fall back to cache)
                 val models = try {
-                    gatewayRepo.fetchAndCacheModels(gw)
+                    gatewayRepo.fetchAndCacheModels(gateway)
                 } catch (e: Exception) {
                     Log.w("Cortex", "Model fetch failed, using cache: ${e.message}")
-                    gatewayRepo.getCachedModels(gw.id)
+                    gatewayRepo.getCachedModels(gateway.id)
                 }
-                Log.d("Cortex", "New chat: fetched ${models.size} models")
+                Log.d("Cortex", "Fetched ${models.size} models for ${gateway.name}")
                 _state.update { it.copy(isCreating = false, availableModels = models, showModelPicker = models.isNotEmpty()) }
-
                 if (models.isEmpty()) {
-                    // No models available — create with fallback model name
-                    createChatWithModel(gw, "gpt-4o-mini")
+                    createChatWithModel(gateway, "gpt-4o-mini")
                 }
-                // If models exist, the UI will show the picker dialog.
-                // User selects a model → createChatWithModel is called.
             } catch (e: Exception) {
                 _state.update { it.copy(isCreating = false, error = "Failed to load models: ${e.message}") }
             }
         }
     }
 
-    /**
-     * Create a new chat with the selected model.
-     */
     fun createChatWithModel(gateway: GatewayEntity, modelId: String) {
         viewModelScope.launch {
             _state.update { it.copy(isCreating = true, error = null, showModelPicker = false) }
             try {
-                // Save as default model for this gateway
                 com.cortex.app.CortexApp.instance.settingsStore.setDefaultModel(gateway.id, modelId)
-
                 val wsConfig = com.cortex.app.CortexApp.instance.settingsStore.webSearchConfig
                 val id = chatRepo.createChat(
                     title = "New Chat",
@@ -129,8 +133,8 @@ class ChatListViewModel(
                     model = modelId,
                     webSearchEnabled = wsConfig.provider != com.cortex.app.data.model.SearchProvider.DISABLED
                 )
-                Log.d("Cortex", "Created chat id=$id with model=$modelId")
-                _state.update { it.copy(isCreating = false, showModelPicker = false, availableModels = emptyList()) }
+                Log.d("Cortex", "Created chat id=$id model=$modelId")
+                _state.update { it.copy(isCreating = false, showModelPicker = false, availableModels = emptyList(), selectedGateway = null) }
                 pendingNewChatCallback?.invoke(id)
                 pendingNewChatCallback = null
             } catch (e: Exception) {
@@ -139,16 +143,13 @@ class ChatListViewModel(
         }
     }
 
-    // Callback holder — the screen sets this before calling startNewChat
-    private var pendingNewChatCallback: ((Long) -> Unit)? = null
-
-    fun createNewChat(onCreated: (Long) -> Unit) {
-        pendingNewChatCallback = onCreated
-        startNewChat()
+    fun dismissGatewayPicker() {
+        _state.update { it.copy(showGatewayPicker = false) }
+        pendingNewChatCallback = null
     }
 
     fun dismissModelPicker() {
-        _state.update { it.copy(showModelPicker = false, availableModels = emptyList()) }
+        _state.update { it.copy(showModelPicker = false, availableModels = emptyList(), selectedGateway = null) }
         pendingNewChatCallback = null
     }
 
