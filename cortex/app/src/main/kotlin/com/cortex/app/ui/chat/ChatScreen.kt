@@ -330,7 +330,14 @@ private fun StreamingBubble(
                     Spacer(Modifier.height(6.dp))
                 }
                 if (content.isNotBlank()) {
-                    SelectionContainer { MarkdownText(text = content, color = TextPrimary, fontSize = 15, isStreaming = true) }
+                    // Use PLAIN TEXT during streaming — no markdown parsing (prevents crash)
+                    SelectionContainer {
+                        Text(
+                            text = content,
+                            style = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
         }

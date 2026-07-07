@@ -53,7 +53,7 @@ class ChatViewModel(
     private val streamingBuffer = StringBuilder()
     private val reasoningBuffer = StringBuilder()
     private var lastFlushTime = 0L
-    private val FLUSH_INTERVAL_MS = 80L  // Update UI at most every 80ms
+    private val FLUSH_INTERVAL_MS = 150L  // Update UI at most every 150ms — prevents crash on long responses
 
     init {
         loadChat()
