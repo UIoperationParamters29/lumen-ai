@@ -1,0 +1,177 @@
+BUILD_STARTED 2026-07-09T18:20:27+00:00
+--- Step 1: assembleDebug ---
+Starting a Gradle Daemon, 1 incompatible Daemon could not be reused, use --status for details
+Configuration on demand is an incubating feature.
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugGlobalSynthetics
+> Task :app:processDebugJavaRes
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeDebugStartupProfile UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeProjectDexDebug
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugJavaResource
+> Task :app:mergeDebugNativeLibs NO-SOURCE
+> Task :app:stripDebugDebugSymbols NO-SOURCE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:assembleDebug
+
+BUILD SUCCESSFUL in 41s
+37 actionable tasks: 9 executed, 28 up-to-date
+DEBUG_EXIT=0
+--- Step 2: assembleRelease ---
+Configuration on demand is an incubating feature.
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :app:mergeReleaseNativeLibs NO-SOURCE
+> Task :app:stripReleaseDebugSymbols NO-SOURCE
+> Task :app:extractReleaseNativeSymbolTables NO-SOURCE
+> Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :app:checkReleaseDuplicateClasses UP-TO-DATE
+> Task :app:buildKotlinToolingMetadata UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:generateReleaseBuildConfig UP-TO-DATE
+> Task :app:checkReleaseAarMetadata UP-TO-DATE
+> Task :app:generateReleaseResValues UP-TO-DATE
+> Task :app:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :app:generateReleaseResources UP-TO-DATE
+> Task :app:mergeReleaseResources UP-TO-DATE
+> Task :app:packageReleaseResources UP-TO-DATE
+> Task :app:parseReleaseLocalResources UP-TO-DATE
+> Task :app:createReleaseCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksRelease UP-TO-DATE
+> Task :app:processReleaseMainManifest UP-TO-DATE
+> Task :app:processReleaseManifest UP-TO-DATE
+> Task :app:processReleaseManifestForPackage UP-TO-DATE
+> Task :app:processReleaseResources UP-TO-DATE
+> Task :app:compileReleaseKotlin UP-TO-DATE
+> Task :app:javaPreCompileRelease UP-TO-DATE
+> Task :app:compileReleaseJavaWithJavac
+> Task :app:dexBuilderRelease
+> Task :app:desugarReleaseFileDependencies UP-TO-DATE
+> Task :app:mergeReleaseStartupProfile UP-TO-DATE
+> Task :app:mergeExtDexRelease UP-TO-DATE
+> Task :app:mergeReleaseArtProfile UP-TO-DATE
+> Task :app:mergeReleaseGlobalSynthetics
+> Task :app:mergeReleaseShaders UP-TO-DATE
+> Task :app:compileReleaseShaders NO-SOURCE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :app:mergeReleaseAssets UP-TO-DATE
+> Task :app:compressReleaseAssets UP-TO-DATE
+> Task :app:extractReleaseVersionControlInfo UP-TO-DATE
+> Task :app:processReleaseJavaRes
+The message received from the daemon indicates that the daemon has disappeared.
+Build request sent: Build{id=d75674db-37c3-4459-98d5-64470e6275bc, currentDir=/home/z/my-project/lumen-ai/cortex}
+Attempting to read last messages from the daemon log...
+Daemon pid: 2511
+  log file: /home/z/.gradle/daemon/8.7/daemon-2511.out.log
+----- Last  20 lines from daemon log file - daemon-2511.out.log -----
+2026-07-09T18:21:11.121+0000 [DEBUG] [org.gradle.launcher.daemon.server.DefaultDaemonConnection] thread 84: Received non-IO message from client: Build{id=d75674db-37c3-4459-98d5-64470e6275bc, currentDir=/home/z/my-project/lumen-ai/cortex}
+2026-07-09T18:21:11.121+0000 [INFO] [org.gradle.launcher.daemon.server.DefaultIncomingConnectionHandler] Received command: Build{id=d75674db-37c3-4459-98d5-64470e6275bc, currentDir=/home/z/my-project/lumen-ai/cortex}.
+2026-07-09T18:21:11.121+0000 [DEBUG] [org.gradle.launcher.daemon.server.DefaultIncomingConnectionHandler] Starting executing command: Build{id=d75674db-37c3-4459-98d5-64470e6275bc, currentDir=/home/z/my-project/lumen-ai/cortex} with connection: socket connection from /127.0.0.1:35693 to /127.0.0.1:38580.
+2026-07-09T18:21:11.121+0000 [DEBUG] [org.gradle.launcher.daemon.server.DaemonStateCoordinator] Command execution: started DaemonCommandExecution[command = Build{id=d75674db-37c3-4459-98d5-64470e6275bc, currentDir=/home/z/my-project/lumen-ai/cortex}, connection = DefaultDaemonConnection: socket connection from /127.0.0.1:35693 to /127.0.0.1:38580] after 0.0 minutes of idle
+2026-07-09T18:21:11.121+0000 [INFO] [org.gradle.launcher.daemon.server.DaemonRegistryUpdater] Marking the daemon as busy, address: [181531e6-8c63-4929-8508-54a35f350da8 port:35693, addresses:[localhost/127.0.0.1]]
+2026-07-09T18:21:11.122+0000 [DEBUG] [org.gradle.launcher.daemon.registry.PersistentDaemonRegistry] Marking busy by address: [181531e6-8c63-4929-8508-54a35f350da8 port:35693, addresses:[localhost/127.0.0.1]]
+2026-07-09T18:21:11.122+0000 [DEBUG] [org.gradle.cache.internal.DefaultFileLockManager] Waiting to acquire exclusive lock on daemon addresses registry.
+2026-07-09T18:21:11.122+0000 [DEBUG] [org.gradle.cache.internal.DefaultFileLockManager] Lock acquired on daemon addresses registry.
+2026-07-09T18:21:11.122+0000 [DEBUG] [org.gradle.cache.internal.DefaultFileLockManager] Releasing lock on daemon addresses registry.
+2026-07-09T18:21:11.122+0000 [DEBUG] [org.gradle.launcher.daemon.server.DaemonStateCoordinator] resetting idle timer
+2026-07-09T18:21:11.122+0000 [DEBUG] [org.gradle.launcher.daemon.server.DaemonStateCoordinator] daemon is running. Sleeping until state changes.
+2026-07-09T18:21:11.122+0000 [INFO] [org.gradle.launcher.daemon.server.exec.StartBuildOrRespondWithBusy] Daemon is about to start building Build{id=d75674db-37c3-4459-98d5-64470e6275bc, currentDir=/home/z/my-project/lumen-ai/cortex}. Dispatching build started information...
+2026-07-09T18:21:11.123+0000 [DEBUG] [org.gradle.launcher.daemon.server.SynchronizedDispatchConnection] thread 28: dispatching org.gradle.launcher.daemon.protocol.BuildStarted@3180dcd0
+2026-07-09T18:21:11.123+0000 [DEBUG] [org.gradle.launcher.daemon.server.exec.EstablishBuildEnvironment] Configuring env variables: [PATH, FC_REGION, BUN_INSTALL_BIN, JAVA_HOME, CLICOLOR_FORCE, TERM, FC_CONTAINER_ID, ANDROID_HOME, UV_CACHE_DIR, FC_FUNCTION_HANDLER, KATA_CONTAINER, FC_CUSTOM_LISTEN_PORT, BUN_RUNTIME_TRANSPILER_CACHE_PATH, DATABASE_URL, FC_FUNCTION_NAME, MAIL, CLAWHUB_WORKDIR, LOGNAME, NO_COLOR, PWD, CLAWHUB_DISABLE_TELEMETRY, _, UV, SHELL, SIGMA_APP_NAME, FC_INSTANCE_ID, UV_PYTHON, OLDPWD, BUN_INSTALL, CLICOLOR, USER, PYTHONDONTWRITEBYTECODE, VIRTUAL_ENV, PYTHONUNBUFFERED, UV_RUN_RECURSION_DEPTH, DEBIAN_FRONTEND, FC_FUNCTION_MEMORY_SIZE, FC_ACCOUNT_ID, STEP_START_TIME, LC_CTYPE, SHLVL, HOME]
+2026-07-09T18:21:11.123+0000 [DEBUG] [org.gradle.launcher.daemon.server.exec.LogToClient] About to start relaying all logs to the client via the connection.
+2026-07-09T18:21:11.123+0000 [INFO] [org.gradle.launcher.daemon.server.exec.LogToClient] The client will now receive all logging from the daemon (pid: 2511). The daemon log file: /home/z/.gradle/daemon/8.7/daemon-2511.out.log
+2026-07-09T18:21:11.128+0000 [INFO] [org.gradle.launcher.daemon.server.exec.LogAndCheckHealth] Starting 2nd build in daemon [uptime: 41.222 secs, performance: 97%, GC rate: 0.00/s, heap usage: 0% of 1 GiB, non-heap usage: 22% of 512 MiB]
+2026-07-09T18:21:11.128+0000 [DEBUG] [org.gradle.launcher.daemon.server.exec.ExecuteBuild] The daemon has started executing the build.
+2026-07-09T18:21:11.128+0000 [DEBUG] [org.gradle.launcher.daemon.server.exec.ExecuteBuild] Executing build with daemon context: DefaultDaemonContext[uid=e74ba155-96b6-4006-beb0-e2790097b0f8,javaHome=/home/z/jdk-21.0.3+9,daemonRegistryDir=/home/z/.gradle/daemon,pid=2511,idleTimeout=600000,priority=NORMAL,applyInstrumentationAgent=true,daemonOpts=-XX:MaxMetaspaceSize=512m,-XX:+UseG1GC,--add-opens=java.base/java.util=ALL-UNNAMED,--add-opens=java.base/java.lang=ALL-UNNAMED,--add-opens=java.base/java.lang.invoke=ALL-UNNAMED,--add-opens=java.prefs/java.util.prefs=ALL-UNNAMED,--add-opens=java.base/java.nio.charset=ALL-UNNAMED,--add-opens=java.base/java.net=ALL-UNNAMED,--add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED,-Xmx1024m,-Dfile.encoding=UTF-8,-Duser.country=US,-Duser.language=en,-Duser.variant]
+Configuration on demand is an incubating feature.
+----- End of the daemon log -----
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Gradle build daemon disappeared unexpectedly (it may have been killed or may have crashed)
+
+* Try:
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+* Exception is:
+org.gradle.launcher.daemon.client.DaemonDisappearedException: Gradle build daemon disappeared unexpectedly (it may have been killed or may have crashed)
+	at org.gradle.launcher.daemon.client.DaemonClient.handleDaemonDisappearance(DaemonClient.java:273)
+	at org.gradle.launcher.daemon.client.DaemonClient.monitorBuild(DaemonClient.java:246)
+	at org.gradle.launcher.daemon.client.DaemonClient.executeBuild(DaemonClient.java:201)
+	at org.gradle.launcher.daemon.client.DaemonClient.execute(DaemonClient.java:151)
+	at org.gradle.launcher.daemon.client.DaemonClient.execute(DaemonClient.java:97)
+	at org.gradle.launcher.cli.RunBuildAction.run(RunBuildAction.java:57)
+	at org.gradle.internal.Actions$RunnableActionAdapter.execute(Actions.java:167)
+	at org.gradle.launcher.cli.DefaultCommandLineActionFactory$ParseAndBuildAction.execute(DefaultCommandLineActionFactory.java:259)
+	at org.gradle.launcher.cli.DefaultCommandLineActionFactory$ParseAndBuildAction.execute(DefaultCommandLineActionFactory.java:230)
+	at org.gradle.launcher.cli.DebugLoggerWarningAction.execute(DebugLoggerWarningAction.java:74)
+	at org.gradle.launcher.cli.DebugLoggerWarningAction.execute(DebugLoggerWarningAction.java:30)
+	at org.gradle.launcher.cli.WelcomeMessageAction.execute(WelcomeMessageAction.java:96)
+	at org.gradle.launcher.cli.WelcomeMessageAction.execute(WelcomeMessageAction.java:40)
+	at org.gradle.launcher.cli.NativeServicesInitializingAction.execute(NativeServicesInitializingAction.java:44)
+	at org.gradle.launcher.cli.NativeServicesInitializingAction.execute(NativeServicesInitializingAction.java:26)
+	at org.gradle.launcher.cli.ExceptionReportingAction.execute(ExceptionReportingAction.java:41)
+	at org.gradle.launcher.cli.ExceptionReportingAction.execute(ExceptionReportingAction.java:26)
+	at org.gradle.launcher.cli.DefaultCommandLineActionFactory$WithLogging.execute(DefaultCommandLineActionFactory.java:361)
+	at org.gradle.launcher.Main.doAction(Main.java:35)
+	at org.gradle.launcher.bootstrap.EntryPoint.run(EntryPoint.java:50)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.gradle.launcher.bootstrap.ProcessBootstrap.runNoExit(ProcessBootstrap.java:60)
+	at org.gradle.launcher.bootstrap.ProcessBootstrap.run(ProcessBootstrap.java:37)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.gradle.launcher.GradleMain.main(GradleMain.java:34)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.gradle.wrapper.GradleWrapperMain.main(SourceFile:70)
+
+> Task :app:mergeDexRelease
+> Task :app:mergeReleaseJavaResource
+RELEASE_EXIT=1
+BUILD_FINISHED 2026-07-09T18:21:28+00:00
+total 17940
+drwxrwxr-x 2 z z     4096 Jul  9 18:21 .
+drwxrwxr-x 3 z z     4096 Jul  9 18:21 ..
+-rw-rw-r-- 1 z z 18355588 Jul  9 18:21 app-debug.apk
+-rw-rw-r-- 1 z z      410 Jul  9 18:21 output-metadata.json
+ls: cannot access 'app/build/outputs/apk/release/': No such file or directory

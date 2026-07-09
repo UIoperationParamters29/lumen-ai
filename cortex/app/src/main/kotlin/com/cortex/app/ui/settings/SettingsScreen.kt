@@ -343,7 +343,7 @@ private fun AboutSection() {
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text("Cortex", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                    Text("Version 1.8.0", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text("Version 2.1.0", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                 }
             }
             Spacer(Modifier.height(12.dp))

@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class ChatState(
     val chat: ChatEntity? = null,
@@ -49,11 +50,17 @@ class ChatViewModel(
     private var sendJob: Job? = null
     val thinkingExpanded = mutableStateMapOf<Long, Boolean>()
 
-    // Throttling for streaming UI updates — prevents crash on long responses
+    // Atomic guard against double-send (double-tap send button / IME + button).
+    // compareAndSet guarantees only ONE caller wins per send cycle.
+    private val sendInFlight = AtomicBoolean(false)
+
+    // Throttling for streaming UI updates — prevents jank on long responses
+    // while keeping the UI feeling live. 120ms ≈ 8 fps UI updates, plenty for
+    // text streaming and light on the main thread.
     private val streamingBuffer = StringBuilder()
     private val reasoningBuffer = StringBuilder()
     private var lastFlushTime = 0L
-    private val FLUSH_INTERVAL_MS = 150L  // Update UI at most every 150ms — prevents crash on long responses
+    private val FLUSH_INTERVAL_MS = 120L
 
     init {
         loadChat()
@@ -73,7 +80,27 @@ class ChatViewModel(
         }
         viewModelScope.launch {
             chatRepo.observeMessages(chatId).collect { messages ->
-                _state.update { it.copy(messages = messages) }
+                // When streaming has finished, keep the streaming bubble visible
+                // UNTIL the final assistant message lands in the list — this
+                // eliminates the flicker / content-gap that used to happen when
+                // the streaming bubble was cleared before the saved message
+                // arrived.
+                _state.update { st ->
+                    if (!st.isStreaming && st.streamingContent.isNotEmpty()) {
+                        val lastAssistant = messages.lastOrNull { it.role == "assistant" }
+                        if (lastAssistant != null && !lastAssistant.isStreaming && lastAssistant.content.isNotBlank()) {
+                            st.copy(
+                                messages = messages,
+                                streamingContent = "",
+                                streamingReasoning = ""
+                            )
+                        } else {
+                            st.copy(messages = messages)
+                        }
+                    } else {
+                        st.copy(messages = messages)
+                    }
+                }
             }
         }
     }
@@ -98,7 +125,6 @@ class ChatViewModel(
 
     fun setShowModelPicker(show: Boolean) {
         if (show) {
-            val chat = _state.value.chat ?: return
             viewModelScope.launch {
                 val models = gatewayRepo.fetchAndCacheModels(_state.value.gateway ?: return@launch)
                 _state.update { it.copy(models = models, showModelPicker = show) }
@@ -139,9 +165,17 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Send the current input. Atomic guard prevents duplicate sends from
+     * double-taps or concurrent IME + button triggers.
+     */
     fun send() {
         val text = _state.value.inputText.trim()
-        if (text.isEmpty() || _state.value.isStreaming) return
+        if (text.isEmpty()) return
+        // Atomic compareAndSet: only the first caller proceeds. This closes
+        // the TOCTOU window that previously allowed two user messages.
+        if (!sendInFlight.compareAndSet(false, true)) return
+
         _state.update {
             it.copy(
                 inputText = "",
@@ -173,7 +207,7 @@ class ChatViewModel(
                         _state.update { it.copy(streamingSearchResults = results) }
                     }
                 )
-                // Final flush to ensure all content is shown
+                // Final flush to ensure all content is shown.
                 _state.update {
                     it.copy(
                         streamingContent = streamingBuffer.toString(),
@@ -188,19 +222,22 @@ class ChatViewModel(
                 Log.e("Cortex", "Send exception", e)
                 _state.update { it.copy(error = e.message ?: "Unknown error") }
             } finally {
+                // Keep the streaming bubble visible until the messages flow
+                // emits the final assistant message (handled in loadChat).
+                // We only flip isStreaming off here; streamingContent stays
+                // so the bubble doesn't vanish mid-flicker.
                 _state.update {
                     it.copy(
                         isStreaming = false,
-                        streamingContent = "",
-                        streamingReasoning = "",
                         streamingSearchResults = emptyList()
                     )
                 }
+                sendInFlight.set(false)
             }
         }
     }
 
-    /** Throttle UI updates to prevent crash on long responses — max 1 update per 80ms */
+    /** Throttle UI updates to prevent jank on long responses. */
     private fun flushStreamingIfNeeded() {
         val now = System.currentTimeMillis()
         if (now - lastFlushTime >= FLUSH_INTERVAL_MS) {
@@ -217,18 +254,80 @@ class ChatViewModel(
     fun stop() {
         chatRepo.cancelStream()
         sendJob?.cancel()
-        _state.update { it.copy(isStreaming = false) }
+        sendInFlight.set(false)
+        _state.update {
+            it.copy(
+                isStreaming = false,
+                streamingContent = "",
+                streamingReasoning = "",
+                streamingSearchResults = emptyList()
+            )
+        }
     }
 
+    /**
+     * Regenerate an assistant response: delete the assistant message + its
+     * preceding user message, then re-send the user's text. Uses the same
+     * atomic send guard, and waits for the deletes to settle before sending.
+     */
     fun regenerate(message: MessageEntity) {
         if (_state.value.isStreaming) return
+        if (!sendInFlight.compareAndSet(false, true)) return
         viewModelScope.launch {
-            chatRepo.deleteMessage(message)
-            val history = chatRepo.getMessages(chatId)
-            val lastUser = history.lastOrNull { it.role == "user" } ?: return@launch
-            _state.update { it.copy(inputText = lastUser.content) }
-            chatRepo.deleteMessage(lastUser)
-            send()
+            try {
+                chatRepo.deleteMessage(message)
+                val history = chatRepo.getMessages(chatId)
+                val lastUser = history.lastOrNull { it.role == "user" }
+                if (lastUser != null) {
+                    val userText = lastUser.content
+                    chatRepo.deleteMessage(lastUser)
+
+                    _state.update {
+                        it.copy(
+                            inputText = "",
+                            isStreaming = true,
+                            streamingContent = "",
+                            streamingReasoning = "",
+                            streamingSearchResults = emptyList(),
+                            error = null
+                        )
+                    }
+                    streamingBuffer.setLength(0)
+                    reasoningBuffer.setLength(0)
+                    lastFlushTime = System.currentTimeMillis()
+
+                    val result = chatRepo.sendMessage(
+                        chatId = chatId,
+                        userText = userText,
+                        onToken = { piece ->
+                            streamingBuffer.append(piece)
+                            flushStreamingIfNeeded()
+                        },
+                        onReasoning = { piece ->
+                            reasoningBuffer.append(piece)
+                            flushStreamingIfNeeded()
+                        },
+                        onSearchResults = { results ->
+                            _state.update { it.copy(streamingSearchResults = results) }
+                        }
+                    )
+                    _state.update {
+                        it.copy(
+                            streamingContent = streamingBuffer.toString(),
+                            streamingReasoning = reasoningBuffer.toString()
+                        )
+                    }
+                    result.onFailure { e ->
+                        _state.update { it.copy(error = e.message ?: "Regenerate failed") }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("Cortex", "Regenerate exception", e)
+                _state.update { it.copy(error = e.message ?: "Regenerate failed") }
+            } finally {
+                _state.update { it.copy(isStreaming = false, streamingSearchResults = emptyList()) }
+                sendInFlight.set(false)
+            }
         }
     }
 

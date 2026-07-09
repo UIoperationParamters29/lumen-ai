@@ -6,26 +6,33 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.cortex.app.ui.theme.*
 
 /**
- * Animated Cortex orb — single clean orb with a visible orbiting dot.
- * The dot physically orbits around the orb so rotation is OBVIOUS.
+ * High-performance animated Cortex orb.
+ *
+ * Performance strategy (critical for phones):
+ *  - Single Canvas draw call instead of nested Box composables → fewer nodes
+ *  - graphicsLayer { } block reads animated State INSIDE the lambda → only
+ *    invalidates the GPU layer, never triggers recomposition of the composable
+ *  - All drawing (sphere gradient + orbiting dot) in one drawScope pass
+ *
+ * This keeps a LazyColumn full of assistant-message orbs buttery smooth even
+ * on mid-range devices, because each frame is just a layer transform + a
+ * single invalidated draw, not a tree recomposition.
  */
 @Composable
 fun CortexOrb(
@@ -36,66 +43,100 @@ fun CortexOrb(
 ) {
     val transition = rememberInfiniteTransition(label = "orb")
 
-    val scaleAnim by transition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.08f,
+    // Keep State objects (do NOT use `by` delegate) so we can read .value
+    // inside the graphicsLayer / draw lambdas without recomposing.
+    val scaleState = transition.animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.06f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
+            animation = tween(1100, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse"
     )
-
-    val rotation by transition.animateFloat(
+    val rotationState = transition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2500, easing = LinearEasing),
+            animation = tween(2600, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "rotation"
     )
 
-    val finalScale = if (pulse) scaleAnim else 1f
-    val finalRotation = if (spin) rotation else 0f
-
-    // Container — large enough for the orbiting dot
+    // Container is larger than the orb to give the orbiting dot room.
     val containerSize = size * 1.25f
 
-    Box(modifier = modifier.size(containerSize * finalScale)) {
-
-        // Main orb — solid gradient sphere (static, doesn't rotate)
-        Box(
-            modifier = Modifier
-                .size(size * finalScale)
-                .align(Alignment.Center)
-                .clip(CircleShape)
-                .background(
-                    Brush.sweepGradient(
-                        colors = listOf(
-                            AccentBlue,
-                            AccentCyan,
-                            AccentGreen,
-                            AccentIndigo,
-                            AccentBlue
-                        )
-                    )
-                )
+    // Colors captured once (stable across frames).
+    val orbColors = remember {
+        listOf(
+            AccentBlue,
+            AccentCyan,
+            AccentGreen,
+            AccentIndigo,
+            AccentBlue
         )
+    }
 
-        // Orbiting dot — rotating container holds dot at top, creating orbit
-        Box(
-            modifier = Modifier
-                .size(containerSize * finalScale)
-                .align(Alignment.Center)
-                .rotate(finalRotation)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(size * 0.2f * finalScale)
-                    .align(Alignment.TopCenter)
-                    .clip(CircleShape)
-                    .background(Color.White)
+    Box(
+        modifier = modifier
+            .size(containerSize)
+            // graphicsLayer block: reading State.value here only re-runs the
+            // block (updates the GPU layer), it does NOT recompose this
+            // composable. This is the key to smooth list performance.
+            .graphicsLayer {
+                val s = if (pulse) scaleState.value else 1f
+                scaleX = s
+                scaleY = s
+                rotationZ = if (spin) rotationState.value else 0f
+            }
+    ) {
+        Canvas(modifier = Modifier.size(containerSize)) {
+            val w = this.size.width
+            val h = this.size.height
+            val center = Offset(w / 2f, h / 2f)
+            val orbRadius = (this.size.minDimension * 0.4f) // = size/2 → diameter = size
+            val dotRadius = orbRadius * 0.22f
+            val dotOrbitRadius = orbRadius * 1.18f
+
+            // Main orb sphere — sweep gradient (rotation handled by graphicsLayer
+            // on the parent, so the gradient visually spins with the whole layer).
+            drawCircle(
+                brush = Brush.sweepGradient(orbColors, center),
+                radius = orbRadius,
+                center = center
+            )
+
+            // Inner highlight — gives the orb a glassy 3D feel.
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color.White.copy(alpha = 0.35f), Color.Transparent),
+                    center = Offset(center.x - orbRadius * 0.3f, center.y - orbRadius * 0.3f),
+                    radius = orbRadius * 0.7f
+                ),
+                radius = orbRadius,
+                center = center
+            )
+
+            // Orbiting dot — drawn at top center, then the whole layer rotates.
+            // Because graphicsLayer rotationZ is applied to the parent, the dot
+            // appears to orbit. (No need for an inner rotate() when the layer
+            // already spins; but we keep the draw static here so the gradient
+            // + dot rotate together cleanly.)
+            drawCircle(
+                color = Color.White,
+                radius = dotRadius,
+                center = Offset(center.x, center.y - dotOrbitRadius)
+            )
+            // Tiny glow under the dot for depth.
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color.White.copy(alpha = 0.45f), Color.Transparent),
+                    center = Offset(center.x, center.y - dotOrbitRadius),
+                    radius = dotRadius * 2.2f
+                ),
+                radius = dotRadius * 2.2f,
+                center = Offset(center.x, center.y - dotOrbitRadius)
             )
         }
     }
@@ -113,7 +154,22 @@ fun StaticOrb(
     Box(
         modifier = modifier
             .size(size)
-            .clip(CircleShape)
-            .background(gradient)
-    )
+    ) {
+        Canvas(modifier = Modifier.size(size)) {
+            val center = Offset(this.size.width / 2f, this.size.height / 2f)
+            val r = this.size.minDimension / 2f
+            drawCircle(brush = gradient, radius = r, center = center)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color.White.copy(alpha = 0.3f), Color.Transparent),
+                    center = Offset(center.x - r * 0.3f, center.y - r * 0.3f),
+                    radius = r * 0.7f
+                ),
+                radius = r,
+                center = center
+            )
+        }
+    }
 }
+
+

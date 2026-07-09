@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -42,11 +44,28 @@ fun ChatScreen(
     val state by vm.state.collectAsState()
     val listState = rememberLazyListState()
     val keyboard = LocalSoftwareKeyboardController.current
+    val haptics = LocalHapticFeedback.current
 
-    LaunchedEffect(state.messages.size, state.streamingContent, state.streamingReasoning) {
-        val totalItems = state.messages.size + if (state.streamingContent.isNotEmpty()) 1 else 0
-        if (totalItems > 0) {
-            try { listState.animateScrollToItem((totalItems - 1).coerceAtLeast(0)) } catch (_: Exception) { }
+    // Track whether the user is pinned near the bottom; only auto-scroll then
+    // so reading older messages isn't yanked away mid-stream on long replies.
+    val isAtBottom by remember {
+        derivedStateOf {
+            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val total = listState.layoutInfo.totalItemsCount
+            total == 0 || last >= total - 2
+        }
+    }
+
+    // Auto-scroll on new content, but only when the user is at the bottom.
+    // This is the key fix for "long texts break" — previously every token
+    // triggered an animated scroll that fought the renderer.
+    LaunchedEffect(state.messages.size, state.streamingContent.length, state.streamingReasoning.length) {
+        if (isAtBottom) {
+            val totalItems = state.messages.size +
+                if (state.isStreaming || state.streamingContent.isNotEmpty()) 1 else 0
+            if (totalItems > 0) {
+                try { listState.animateScrollToItem((totalItems - 1).coerceAtLeast(0)) } catch (_: Exception) { }
+            }
         }
     }
 
@@ -58,10 +77,26 @@ fun ChatScreen(
                         Column(
                             modifier = Modifier.clickable { vm.setShowModelPicker(true) }
                         ) {
-                            Text(state.chat?.title ?: "Chat", style = MaterialTheme.typography.titleMedium, color = TextPrimary, maxLines = 1, fontWeight = FontWeight.Medium)
+                            Text(
+                                state.chat?.title ?: "Chat",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = TextPrimary,
+                                maxLines = 1,
+                                fontWeight = FontWeight.Medium
+                            )
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(state.chat?.model ?: "", style = MaterialTheme.typography.labelSmall, color = AccentCyan, maxLines = 1)
-                                Icon(Icons.Rounded.KeyboardArrowDown, null, tint = AccentCyan, modifier = Modifier.size(14.dp))
+                                Text(
+                                    state.chat?.model ?: "",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = AccentCyan,
+                                    maxLines = 1
+                                )
+                                Icon(
+                                    Icons.Rounded.KeyboardArrowDown,
+                                    null,
+                                    tint = AccentCyan,
+                                    modifier = Modifier.size(14.dp)
+                                )
                             }
                         }
                     },
@@ -73,10 +108,18 @@ fun ChatScreen(
                     actions = {
                         val wsOn = state.chat?.webSearchEnabled == true
                         IconButton(onClick = vm::toggleWebSearch) {
-                            Icon(Icons.Rounded.TravelExplore, "Web search", tint = if (wsOn) AccentGreen else TextTertiary)
+                            Icon(
+                                Icons.Rounded.TravelExplore,
+                                "Web search",
+                                tint = if (wsOn) AccentGreen else TextTertiary
+                            )
                         }
                         IconButton(onClick = vm::toggleThinking) {
-                            Icon(Icons.Rounded.Psychology, "Thinking", tint = if (state.showThinking) AccentCyan else TextTertiary)
+                            Icon(
+                                Icons.Rounded.Psychology,
+                                "Thinking",
+                                tint = if (state.showThinking) AccentCyan else TextTertiary
+                            )
                         }
                         IconButton(onClick = { vm.setShowModelPicker(true) }) {
                             Icon(Icons.Rounded.Tune, "Model", tint = TextPrimary)
@@ -105,7 +148,11 @@ fun ChatScreen(
             ChatInputBar(
                 text = state.inputText,
                 onTextChange = vm::updateInput,
-                onSend = { keyboard?.hide(); vm.send() },
+                onSend = {
+                    keyboard?.hide()
+                    haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                    vm.send()
+                },
                 onStop = vm::stop,
                 isStreaming = state.isStreaming
             )
@@ -124,19 +171,27 @@ fun ChatScreen(
         ) {
             AnimatedVisibility(visible = state.error != null) {
                 Surface(modifier = Modifier.fillMaxWidth(), color = StatusError.copy(alpha = 0.1f)) {
-                    Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(Icons.Rounded.Error, null, tint = StatusError, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(state.error ?: "", style = MaterialTheme.typography.bodySmall, color = TextPrimary, modifier = Modifier.weight(1f))
+                        Text(
+                            state.error ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextPrimary,
+                            modifier = Modifier.weight(1f)
+                        )
                         TextButton(onClick = vm::clearError) { Text("Dismiss", color = AccentCyan) }
                     }
                 }
             }
 
-            if (state.messages.isEmpty() && !state.isStreaming) {
+            if (state.messages.isEmpty() && !state.isStreaming && state.streamingContent.isEmpty()) {
                 EmptyChatView(model = state.chat?.model ?: "")
             } else {
-                // Filter out streaming placeholder messages — StreamingBubble handles those
+                // Filter out streaming placeholder messages — StreamingBubble handles those.
                 val displayMessages = state.messages.filter { !it.isStreaming }
                 LazyColumn(
                     state = listState,
@@ -154,7 +209,13 @@ fun ChatScreen(
                             onDelete = { vm.deleteMessage(msg) }
                         )
                     }
-                    if (state.isStreaming) {
+                    // Show the streaming bubble while actively streaming OR while
+                    // the final message is still being delivered to the list
+                    // (prevents flicker / content gap at the end of a reply).
+                    val showStreaming = state.isStreaming ||
+                        state.streamingContent.isNotEmpty() ||
+                        state.streamingReasoning.isNotEmpty()
+                    if (showStreaming) {
                         item(key = "streaming") {
                             StreamingBubble(
                                 content = state.streamingContent,
@@ -188,6 +249,12 @@ fun ChatScreen(
     }
 }
 
+/**
+ * Redesigned input bar: the text field and the send button are now separate
+ * elements in a row, so the send target is a big, easy-to-tap circle sitting
+ * OUTSIDE the field. Much more comfortable on phones than the old in-field
+ * trailing icon, which was cramped and easy to miss.
+ */
 @Composable
 private fun ChatInputBar(
     text: String,
@@ -203,49 +270,23 @@ private fun ChatInputBar(
             .navigationBarsPadding(),
         color = Color.Transparent
     ) {
-        GlassCard(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
-            cornerRadius = 24.dp
+            verticalAlignment = Alignment.Bottom
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.Bottom
+            GlassCard(
+                modifier = Modifier.weight(1f),
+                cornerRadius = 24.dp
             ) {
                 OutlinedTextField(
                     value = text,
                     onValueChange = onTextChange,
                     modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 44.dp, max = 160.dp),
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp, max = 160.dp),
                     placeholder = { Text("Message Cortex…", color = TextTertiary) },
-                    trailingIcon = {
-                        if (text.isNotEmpty() && !isStreaming) {
-                            IconButton(onClick = onSend, modifier = Modifier.size(40.dp)) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(RoundedCornerShape(50))
-                                        .background(Brush.linearGradient(listOf(AccentBlue, AccentCyan)))
-                                ) {
-                                    Icon(Icons.Rounded.ArrowUpward, "Send", tint = Color.White, modifier = Modifier.align(Alignment.Center).size(18.dp))
-                                }
-                            }
-                        }
-                        if (isStreaming) {
-                            IconButton(onClick = onStop, modifier = Modifier.size(40.dp)) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(RoundedCornerShape(50))
-                                        .background(StatusError.copy(alpha = 0.2f))
-                                ) {
-                                    Icon(Icons.Rounded.Stop, "Stop", tint = StatusError, modifier = Modifier.align(Alignment.Center).size(16.dp))
-                                }
-                            }
-                        }
-                    },
                     colors = outTextFieldColors(),
                     shape = RoundedCornerShape(24.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
@@ -253,35 +294,64 @@ private fun ChatInputBar(
                     textStyle = MaterialTheme.typography.bodyLarge
                 )
             }
+
+            Spacer(Modifier.width(8.dp))
+
+            // Send / Stop button — large, circular, sits outside the field.
+            val sendBg = when {
+                isStreaming -> SolidColor(StatusError.copy(alpha = 0.18f))
+                text.isNotBlank() -> Brush.linearGradient(listOf(AccentBlue, AccentCyan))
+                else -> SolidColor(BgSurfaceHigh)
+            }
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(sendBg)
+                    .clickable(
+                        enabled = isStreaming || text.isNotBlank(),
+                        onClick = {
+                            if (isStreaming) onStop() else onSend()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isStreaming) {
+                    Icon(
+                        Icons.Rounded.Stop,
+                        "Stop",
+                        tint = StatusError,
+                        modifier = Modifier.size(22.dp)
+                    )
+                } else {
+                    Icon(
+                        Icons.Rounded.ArrowUpward,
+                        "Send",
+                        tint = if (text.isNotBlank()) Color.White else TextTertiary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun StreamingDots() {
-    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "dots")
+    val transition = rememberInfiniteTransition(label = "dots")
     val dot1 by transition.animateFloat(
         initialValue = 0.3f, targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(500, delayMillis = 0),
-            androidx.compose.animation.core.RepeatMode.Reverse
-        ),
+        animationSpec = infiniteRepeatable(tween(500, delayMillis = 0), RepeatMode.Reverse),
         label = "dot1"
     )
     val dot2 by transition.animateFloat(
         initialValue = 0.3f, targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(500, delayMillis = 150),
-            androidx.compose.animation.core.RepeatMode.Reverse
-        ),
+        animationSpec = infiniteRepeatable(tween(500, delayMillis = 150), RepeatMode.Reverse),
         label = "dot2"
     )
     val dot3 by transition.animateFloat(
         initialValue = 0.3f, targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(500, delayMillis = 300),
-            androidx.compose.animation.core.RepeatMode.Reverse
-        ),
+        animationSpec = infiniteRepeatable(tween(500, delayMillis = 300), RepeatMode.Reverse),
         label = "dot3"
     )
     val alphas = listOf(dot1, dot2, dot3)
@@ -317,7 +387,7 @@ private fun StreamingBubble(
             CortexOrb(size = 28.dp, pulse = true, spin = true)
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
-                // If no content yet and no reasoning, show "thinking" indicator
+                // If no content yet and no reasoning, show "thinking" indicator.
                 if (content.isBlank() && reasoning.isBlank() && searchResults.isEmpty()) {
                     StreamingDots()
                 }
@@ -330,7 +400,8 @@ private fun StreamingBubble(
                     Spacer(Modifier.height(6.dp))
                 }
                 if (content.isNotBlank()) {
-                    // Use PLAIN TEXT during streaming — no markdown parsing (prevents crash)
+                    // PLAIN TEXT during streaming — no markdown parsing (prevents
+                    // jank / crashes on very long partial responses).
                     SelectionContainer {
                         Text(
                             text = content,
